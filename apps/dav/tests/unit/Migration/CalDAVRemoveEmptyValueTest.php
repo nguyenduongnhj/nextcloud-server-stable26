@@ -27,8 +27,8 @@ namespace OCA\DAV\Tests\Unit\DAV\Migration;
 
 use OCA\DAV\CalDAV\CalDavBackend;
 use OCA\DAV\Migration\CalDAVRemoveEmptyValue;
-use OCP\ILogger;
 use OCP\Migration\IOutput;
+use Psr\Log\LoggerInterface;
 use Sabre\VObject\InvalidDataException;
 use Test\TestCase;
 
@@ -40,7 +40,7 @@ use Test\TestCase;
  */
 class CalDAVRemoveEmptyValueTest extends TestCase {
 
-	/** @var ILogger|\PHPUnit\Framework\MockObject\MockObject */
+	/** @var LoggerInterface|\PHPUnit\Framework\MockObject\MockObject */
 	private $logger;
 
 	/** @var CalDavBackend|\PHPUnit\Framework\MockObject\MockObject */
@@ -94,12 +94,12 @@ END:VCALENDAR';
 	protected function setUp(): void {
 		parent::setUp();
 
-		$this->logger = $this->createMock(ILogger::class);
+		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->backend = $this->createMock(CalDavBackend::class);
 		$this->output = $this->createMock(IOutput::class);
 	}
 
-	public function testRunAllValid() {
+	public function testRunAllValid(): void {
 		/** @var CalDAVRemoveEmptyValue|\PHPUnit\Framework\MockObject\MockObject $step */
 		$step = $this->getMockBuilder(CalDAVRemoveEmptyValue::class)
 			->setConstructorArgs([
@@ -123,7 +123,7 @@ END:VCALENDAR';
 		$step->run($this->output);
 	}
 
-	public function testRunInvalid() {
+	public function testRunInvalid(): void {
 		/** @var CalDAVRemoveEmptyValue|\PHPUnit\Framework\MockObject\MockObject $step */
 		$step = $this->getMockBuilder(CalDAVRemoveEmptyValue::class)
 			->setConstructorArgs([
@@ -166,7 +166,7 @@ END:VCALENDAR';
 		$step->run($this->output);
 	}
 
-	public function testRunValid() {
+	public function testRunValid(): void {
 		/** @var CalDAVRemoveEmptyValue|\PHPUnit\Framework\MockObject\MockObject $step */
 		$step = $this->getMockBuilder(CalDAVRemoveEmptyValue::class)
 			->setConstructorArgs([
@@ -208,7 +208,7 @@ END:VCALENDAR';
 		$step->run($this->output);
 	}
 
-	public function testRunStillInvalid() {
+	public function testRunStillInvalid(): void {
 		/** @var CalDAVRemoveEmptyValue|\PHPUnit\Framework\MockObject\MockObject $step */
 		$step = $this->getMockBuilder(CalDAVRemoveEmptyValue::class)
 			->setConstructorArgs([

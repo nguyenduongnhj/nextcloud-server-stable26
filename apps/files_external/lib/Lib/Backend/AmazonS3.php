@@ -25,6 +25,7 @@
 namespace OCA\Files_External\Lib\Backend;
 
 use OCA\Files_External\Lib\Auth\AmazonS3\AccessKey;
+use OCA\Files_External\Lib\Auth\AuthMechanism;
 use OCA\Files_External\Lib\DefinitionParameter;
 use OCA\Files_External\Lib\LegacyDependencyCheckPolyfill;
 use OCP\IL10N;
@@ -46,14 +47,18 @@ class AmazonS3 extends Backend {
 					->setFlag(DefinitionParameter::FLAG_OPTIONAL),
 				(new DefinitionParameter('region', $l->t('Region')))
 					->setFlag(DefinitionParameter::FLAG_OPTIONAL),
+				(new DefinitionParameter('storageClass', $l->t('Storage Class')))
+					->setFlag(DefinitionParameter::FLAG_OPTIONAL),
 				(new DefinitionParameter('use_ssl', $l->t('Enable SSL')))
-					->setType(DefinitionParameter::VALUE_BOOLEAN),
+					->setType(DefinitionParameter::VALUE_BOOLEAN)
+					->setDefaultValue(true),
 				(new DefinitionParameter('use_path_style', $l->t('Enable Path Style')))
 					->setType(DefinitionParameter::VALUE_BOOLEAN),
 				(new DefinitionParameter('legacy_auth', $l->t('Legacy (v2) authentication')))
 					->setType(DefinitionParameter::VALUE_BOOLEAN),
 			])
 			->addAuthScheme(AccessKey::SCHEME_AMAZONS3_ACCESSKEY)
+			->addAuthScheme(AuthMechanism::SCHEME_NULL)
 			->setLegacyAuthMechanism($legacyAuth)
 		;
 	}

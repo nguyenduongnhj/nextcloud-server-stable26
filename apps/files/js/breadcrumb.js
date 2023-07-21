@@ -32,7 +32,7 @@
 	 * the URL of a given breadcrumb
 	 */
 	var BreadCrumb = function(options){
-		this.$el = $('<div class="breadcrumb"></div>');
+		this.$el = $('<nav></nav>');
 		this.$menu = $('<div class="popovermenu menu-center"><ul></ul></div>');
 
 		this.crumbSelector = '.crumb:not(.hidden):not(.crumbhome):not(.crumbmenu)';
@@ -104,7 +104,7 @@
 		 * Returns the full URL to the given directory
 		 *
 		 * @param {Object.<String, String>} part crumb data as map
-		 * @param {int} index crumb index
+		 * @param {number} index crumb index
 		 * @return full URL
 		 */
 		getCrumbUrl: function(part, index) {
@@ -123,12 +123,13 @@
 			var $menuItem;
 			this.$el.empty();
 			this.breadcrumbs = [];
+			var $crumbList = $('<ul class="breadcrumb"></ul>');
 
 			for (var i = 0; i < parts.length; i++) {
 				var part = parts[i];
 				var $image;
 				var $link = $('<a></a>');
-				$crumb = $('<div class="crumb svg"></div>');
+				$crumb = $('<li class="crumb svg"></li>');
 				if(part.dir) {
 					$link.attr('href', this.getCrumbUrl(part, i));
 				}
@@ -149,12 +150,13 @@
 					$link.append($image);
 				}
 				this.breadcrumbs.push($crumb);
-				this.$el.append($crumb);
+				$crumbList.append($crumb);
 				// Only add feedback if not menu
 				if (this.onClick && i !== 0) {
 					$link.on('click', this.onClick);
 				}
 			}
+			this.$el.append($crumbList);
 
 			// Menu creation
 			this._createMenu();
@@ -220,7 +222,7 @@
 			});
 			// root part
 			crumbs.push({
-				name: t('core', 'Home'),
+				name: t('files', 'Home'),
 				dir: '/',
 				class: 'crumbhome',
 				linkclass: rootIcon || 'icon-home'
@@ -320,7 +322,7 @@
 			// depending on whether the menu was previously being shown or not.
 			this.$el.find('.crumbmenu').addClass('hidden');
 
-			// Show the crumbs to compress the siblings before hidding again the
+			// Show the crumbs to compress the siblings before hiding again the
 			// crumbs. This is needed when the siblings expand to fill all the
 			// available width, as in that case their old width would limit the
 			// available width for the crumbs.

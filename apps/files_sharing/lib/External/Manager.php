@@ -31,6 +31,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>
  *
  */
+
 namespace OCA\Files_Sharing\External;
 
 use Doctrine\DBAL\Driver\Exception;
@@ -42,11 +43,13 @@ use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Federation\ICloudFederationFactory;
 use OCP\Federation\ICloudFederationProviderManager;
 use OCP\Files;
+use OCP\Files\NotFoundException;
 use OCP\Files\Storage\IStorageFactory;
 use OCP\Http\Client\IClientService;
 use OCP\IDBConnection;
 use OCP\IGroupManager;
 use OCP\IUserManager;
+use OCP\IUserSession;
 use OCP\Notification\IManager;
 use OCP\OCS\IDiscoveryService;
 use OCP\Share;
@@ -83,7 +86,7 @@ class Manager {
 	/** @var ICloudFederationFactory */
 	private $cloudFederationFactory;
 
-	/** @var IGroupManager  */
+	/** @var IGroupManager */
 	private $groupManager;
 
 	/** @var IUserManager */
@@ -96,25 +99,26 @@ class Manager {
 	private $logger;
 
 	public function __construct(
-		IDBConnection $connection,
-		\OC\Files\Mount\Manager $mountManager,
-		IStorageFactory $storageLoader,
-		IClientService $clientService,
-		IManager $notificationManager,
-		IDiscoveryService $discoveryService,
+		IDBConnection                   $connection,
+		\OC\Files\Mount\Manager         $mountManager,
+		IStorageFactory                 $storageLoader,
+		IClientService                  $clientService,
+		IManager                        $notificationManager,
+		IDiscoveryService               $discoveryService,
 		ICloudFederationProviderManager $cloudFederationProviderManager,
-		ICloudFederationFactory $cloudFederationFactory,
-		IGroupManager $groupManager,
-		IUserManager $userManager,
-		?string $uid,
-		IEventDispatcher $eventDispatcher,
-		LoggerInterface $logger
+		ICloudFederationFactory         $cloudFederationFactory,
+		IGroupManager                   $groupManager,
+		IUserManager                    $userManager,
+		IUserSession                    $userSession,
+		IEventDispatcher                $eventDispatcher,
+		LoggerInterface                 $logger
 	) {
+		$user = $userSession->getUser();
 		$this->connection = $connection;
 		$this->mountManager = $mountManager;
 		$this->storageLoader = $storageLoader;
 		$this->clientService = $clientService;
-		$this->uid = $uid;
+		$this->uid = $user ? $user->getUID() : null;
 		$this->notificationManager = $notificationManager;
 		$this->discoveryService = $discoveryService;
 		$this->cloudFederationProviderManager = $cloudFederationProviderManager;
@@ -309,7 +313,7 @@ class Manager {
 
 		if ($share) {
 			\OC_Util::setupFS($this->uid);
-			$shareFolder = Helper::getShareFolder();
+			$shareFolder = Helper::getShareFolder(null, $this->uid);
 			$mountPoint = Files::buildNotExistingFileName($shareFolder, $share['name']);
 			$mountPoint = Filesystem::normalizePath($mountPoint);
 			$hash = md5($mountPoint);
@@ -370,6 +374,7 @@ class Manager {
 				$this->sendFeedbackToRemote($share['remote'], $share['share_token'], $share['remote_id'], 'accept');
 				$event = new FederatedShareAddedEvent($share['remote']);
 				$this->eventDispatcher->dispatchTyped($event);
+				$this->eventDispatcher->dispatchTyped(new Files\Events\InvalidateMountCacheEvent($this->userManager->get($this->uid)));
 				$result = true;
 			}
 		}
@@ -442,14 +447,11 @@ class Manager {
 		return $result;
 	}
 
-	/**
-	 * @param int $remoteShare
-	 */
-	public function processNotification($remoteShare) {
+	public function processNotification(int $remoteShare): void {
 		$filter = $this->notificationManager->createNotification();
 		$filter->setApp('files_sharing')
 			->setUser($this->uid)
-			->setObject('remote_share', (int) $remoteShare);
+			->setObject('remote_share', (string)$remoteShare);
 		$this->notificationManager->markProcessed($filter);
 	}
 
@@ -592,12 +594,15 @@ class Manager {
 		');
 		$result = (bool)$query->execute([$target, $targetHash, $sourceHash, $this->uid]);
 
+		$this->eventDispatcher->dispatchTyped(new Files\Events\InvalidateMountCacheEvent($this->userManager->get($this->uid)));
+
 		return $result;
 	}
 
 	public function removeShare($mountPoint): bool {
-		$mountPointObj = $this->mountManager->find($mountPoint);
-		if ($mountPointObj === null) {
+		try {
+			$mountPointObj = $this->mountManager->find($mountPoint);
+		} catch (NotFoundException $e) {
 			$this->logger->error('Mount point to remove share not found', ['mountPoint' => $mountPoint]);
 			return false;
 		}
@@ -655,7 +660,7 @@ class Manager {
 
 
 		$query->delete('federated_reshares')
-			->where($query->expr()->in('share_id', $query->createFunction('(' . $select . ')')));
+			->where($query->expr()->in('share_id', $query->createFunction($select)));
 		$query->execute();
 
 		$deleteReShares = $this->connection->getQueryBuilder();
@@ -725,10 +730,10 @@ class Manager {
 			// delete group share entry and matching sub-entries
 			$qb->delete('share_external')
 			   ->where(
-				   $qb->expr()->orX(
-					   $qb->expr()->eq('id', $qb->createParameter('share_id')),
-					   $qb->expr()->eq('parent', $qb->createParameter('share_parent_id'))
-				   )
+			   	$qb->expr()->orX(
+			   		$qb->expr()->eq('id', $qb->createParameter('share_id')),
+			   		$qb->expr()->eq('parent', $qb->createParameter('share_parent_id'))
+			   	)
 			   );
 
 			foreach ($shares as $share) {

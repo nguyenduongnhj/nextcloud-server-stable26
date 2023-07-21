@@ -26,6 +26,7 @@ declare(strict_types=1);
 namespace OCA\UserStatus\Service;
 
 use OCP\IL10N;
+use OCP\UserStatus\IUserStatus;
 
 /**
  * Class DefaultStatusService
@@ -41,6 +42,10 @@ class PredefinedStatusService {
 	private const SICK_LEAVE = 'sick-leave';
 	private const VACATIONING = 'vacationing';
 	private const REMOTE_WORK = 'remote-work';
+	/**
+	 * @deprecated See \OCP\UserStatus\IUserStatus::MESSAGE_CALL
+	 */
+	public const CALL = 'call';
 
 	/** @var IL10N */
 	private $l10n;
@@ -101,6 +106,13 @@ class PredefinedStatusService {
 				'message' => $this->getTranslatedStatusForId(self::VACATIONING),
 				'clearAt' => null,
 			],
+			[
+				'id' => self::CALL,
+				'icon' => '💬',
+				'message' => $this->getTranslatedStatusForId(self::CALL),
+				'clearAt' => null,
+				'visible' => false,
+			],
 		];
 	}
 
@@ -139,6 +151,9 @@ class PredefinedStatusService {
 			case self::REMOTE_WORK:
 				return '🏡';
 
+			case self::CALL:
+				return '💬';
+
 			default:
 				return null;
 		}
@@ -166,6 +181,9 @@ class PredefinedStatusService {
 			case self::REMOTE_WORK:
 				return $this->l10n->t('Working remotely');
 
+			case self::CALL:
+				return $this->l10n->t('In a call');
+
 			default:
 				return null;
 		}
@@ -182,6 +200,8 @@ class PredefinedStatusService {
 			self::SICK_LEAVE,
 			self::VACATIONING,
 			self::REMOTE_WORK,
+			IUserStatus::MESSAGE_CALL,
+			IUserStatus::MESSAGE_AVAILABILITY,
 		], true);
 	}
 }

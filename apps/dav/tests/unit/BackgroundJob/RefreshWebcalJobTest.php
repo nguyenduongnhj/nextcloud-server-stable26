@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * @copyright Copyright (c) 2018, Georg Ehrke
  *
@@ -71,7 +74,7 @@ class RefreshWebcalJobTest extends TestCase {
 	 *
 	 * @dataProvider runDataProvider
 	 */
-	public function testRun(int $lastRun, int $time, bool $process) {
+	public function testRun(int $lastRun, int $time, bool $process): void {
 		$backgroundJob = new RefreshWebcalJob($this->refreshWebcalService, $this->config, $this->logger, $this->timeFactory);
 		$backgroundJob->setId(42);
 

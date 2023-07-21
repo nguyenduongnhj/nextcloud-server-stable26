@@ -42,40 +42,23 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IRequest;
 use OCP\Security\ICrypto;
 use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
 
 class OauthApiController extends Controller {
-	/** @var AccessTokenMapper */
-	private $accessTokenMapper;
-	/** @var ClientMapper */
-	private $clientMapper;
-	/** @var ICrypto */
-	private $crypto;
-	/** @var TokenProvider */
-	private $tokenProvider;
-	/** @var ISecureRandom */
-	private $secureRandom;
-	/** @var ITimeFactory */
-	private $time;
-	/** @var Throttler */
-	private $throttler;
 
-	public function __construct(string $appName,
-								IRequest $request,
-								ICrypto $crypto,
-								AccessTokenMapper $accessTokenMapper,
-								ClientMapper $clientMapper,
-								TokenProvider $tokenProvider,
-								ISecureRandom $secureRandom,
-								ITimeFactory $time,
-								Throttler $throttler) {
+	public function __construct(
+		string $appName,
+		IRequest $request,
+		private ICrypto $crypto,
+		private AccessTokenMapper $accessTokenMapper,
+		private ClientMapper $clientMapper,
+		private TokenProvider $tokenProvider,
+		private ISecureRandom $secureRandom,
+		private ITimeFactory $time,
+		private LoggerInterface $logger,
+		private Throttler $throttler
+	) {
 		parent::__construct($appName, $request);
-		$this->crypto = $crypto;
-		$this->accessTokenMapper = $accessTokenMapper;
-		$this->clientMapper = $clientMapper;
-		$this->tokenProvider = $tokenProvider;
-		$this->secureRandom = $secureRandom;
-		$this->time = $time;
-		$this->throttler = $throttler;
 	}
 
 	/**
@@ -124,8 +107,16 @@ class OauthApiController extends Controller {
 			$client_secret = $this->request->server['PHP_AUTH_PW'];
 		}
 
+		try {
+			$storedClientSecret = $this->crypto->decrypt($client->getSecret());
+		} catch (\Exception $e) {
+			$this->logger->error('OAuth client secret decryption error', ['exception' => $e]);
+			return new JSONResponse([
+				'error' => 'invalid_client',
+			], Http::STATUS_BAD_REQUEST);
+		}
 		// The client id and secret must match. Else we don't provide an access token!
-		if ($client->getClientIdentifier() !== $client_id || $client->getSecret() !== $client_secret) {
+		if ($client->getClientIdentifier() !== $client_id || $storedClientSecret !== $client_secret) {
 			return new JSONResponse([
 				'error' => 'invalid_client',
 			], Http::STATUS_BAD_REQUEST);
@@ -133,7 +124,7 @@ class OauthApiController extends Controller {
 
 		$decryptedToken = $this->crypto->decrypt($accessToken->getEncryptedToken(), $code);
 
-		// Obtain the appToken assoicated
+		// Obtain the appToken associated
 		try {
 			$appToken = $this->tokenProvider->getTokenById($accessToken->getTokenId());
 		} catch (ExpiredTokenException $e) {
@@ -147,7 +138,7 @@ class OauthApiController extends Controller {
 		}
 
 		// Rotate the apptoken (so the old one becomes invalid basically)
-		$newToken = $this->secureRandom->generate(72, ISecureRandom::CHAR_UPPER.ISecureRandom::CHAR_LOWER.ISecureRandom::CHAR_DIGITS);
+		$newToken = $this->secureRandom->generate(72, ISecureRandom::CHAR_ALPHANUMERIC);
 
 		$appToken = $this->tokenProvider->rotate(
 			$appToken,
@@ -160,7 +151,7 @@ class OauthApiController extends Controller {
 		$this->tokenProvider->updateToken($appToken);
 
 		// Generate a new refresh token and encrypt the new apptoken in the DB
-		$newCode = $this->secureRandom->generate(128, ISecureRandom::CHAR_UPPER.ISecureRandom::CHAR_LOWER.ISecureRandom::CHAR_DIGITS);
+		$newCode = $this->secureRandom->generate(128, ISecureRandom::CHAR_ALPHANUMERIC);
 		$accessToken->setHashedCode(hash('sha512', $newCode));
 		$accessToken->setEncryptedToken($this->crypto->encrypt($newToken, $newCode));
 		$this->accessTokenMapper->update($accessToken);

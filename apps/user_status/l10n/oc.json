@@ -7,7 +7,8 @@
     "Working remotely" : "En teletrabalh",
     "In a call" : "Al telefòn",
     "User status" : "Estat utilizaire",
-    "Clear status message after" : "Escafar lo messatge d’estat aprèp",
+    "View profile" : "Veire perfil",
+    "Clear status after" : "Escafar l’estat aprèp",
     "What is your status?" : "Quin es vòstre estat ?",
     "Set status" : "Definir estat",
     "Online status" : "Estat en linha",
@@ -31,8 +32,6 @@
     "1 hour" : "1 ora",
     "4 hours" : "4 oras",
     "Mute all notifications" : "Amudir totas las notificacions",
-    "Appear offline" : "Aparéisser fòra linha",
-    "Clear status after" : "Escafar l’estat aprèp",
-    "What's your status?" : "Quin es vòstre estat ?"
+    "Appear offline" : "Aparéisser fòra linha"
 },"pluralForm" :"nplurals=2; plural=(n > 1);"
 }

@@ -3,7 +3,7 @@
  *
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,19 +20,18 @@
  *
  */
 
-import { createClient, getPatcher } from 'webdav'
-import axios from '@nextcloud/axios'
-
-import { getRootPath } from '../utils/davUtils'
-
-// Add this so the server knows it is an request from the browser
-axios.defaults.headers['X-Requested-With'] = 'XMLHttpRequest'
-
-// force our axios
-const patcher = getPatcher()
-patcher.patch('request', axios)
+import { createClient } from 'webdav'
+import { getRootPath } from '../utils/davUtils.js'
+import { getRequestToken } from '@nextcloud/auth'
 
 // init webdav client
-const client = createClient(getRootPath())
+const client = createClient(getRootPath(), {
+	headers: {
+		// Add this so the server knows it is an request from the browser
+		'X-Requested-With': 'XMLHttpRequest',
+		// Inject user auth
+		requesttoken: getRequestToken() ?? '',
+	},
+})
 
 export default client

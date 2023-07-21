@@ -29,18 +29,21 @@
 namespace OCA\FederatedFileSharing\Tests\Controller;
 
 use OC\Federation\CloudIdManager;
-use OC\HintException;
 use OCA\FederatedFileSharing\AddressHandler;
 use OCA\FederatedFileSharing\Controller\MountPublicLinkController;
 use OCA\FederatedFileSharing\FederatedShareProvider;
 use OCP\AppFramework\Http;
 use OCP\Contacts\IManager as IContactsManager;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Federation\ICloudIdManager;
 use OCP\Files\IRootFolder;
+use OCP\HintException;
 use OCP\Http\Client\IClientService;
+use OCP\ICacheFactory;
 use OCP\IL10N;
 use OCP\IRequest;
 use OCP\ISession;
+use OCP\IURLGenerator;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\Share\IManager;
@@ -106,7 +109,13 @@ class MountPublicLinkControllerTest extends \Test\TestCase {
 		$this->userSession = $this->getMockBuilder(IUserSession::class)->disableOriginalConstructor()->getMock();
 		$this->clientService = $this->getMockBuilder('OCP\Http\Client\IClientService')->disableOriginalConstructor()->getMock();
 		$this->contactsManager = $this->createMock(IContactsManager::class);
-		$this->cloudIdManager = new CloudIdManager($this->contactsManager);
+		$this->cloudIdManager = new CloudIdManager(
+			$this->contactsManager,
+			$this->createMock(IURLGenerator::class),
+			$this->userManager,
+			$this->createMock(ICacheFactory::class),
+			$this->createMock(IEventDispatcher::class)
+		);
 
 		$this->controller = new MountPublicLinkController(
 			'federatedfilesharing', $this->request,

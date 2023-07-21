@@ -45,12 +45,7 @@ OC.L10N.register(
     "Office documents" : "Office документи",
     "PDF documents" : "PDF документи",
     "Custom mimetype" : "Прилагоден тип на датотеки",
-    "Select a tag" : "Избери ознака",
-    "No results" : "Нема резултати",
-    "%s (invisible)" : "%s (невидливо)",
-    "%s (restricted)" : "%s (ограничена)",
     "Please enter a valid time span" : "Внесете валиден времески осег",
-    "Others" : "Останати",
     "Desktop client" : "Клиент за компјутер",
     "When" : "Кога",
     "and" : "и",
@@ -61,6 +56,7 @@ OC.L10N.register(
     "Available flows" : "Достапни протоци",
     "For details on how to write your own flow, check out the development documentation." : "За детали како да пишувате ваши сопствени протоци, посетете ја документацијата за развивачи.",
     "More flows" : "Повеќе протоци",
+    "Browse the App Store" : "Прелистајте во продавницата со апликации",
     "Show less" : "Помалку",
     "Show more" : "Прикажи повеќе",
     "Configured flows" : "Конфигурирани протоци",
@@ -87,6 +83,6 @@ OC.L10N.register(
     "not between" : "не помеѓу",
     "is member of" : "е член на",
     "is not member of" : "не е член на",
-    "Browse the app store" : "Прелистајте во продавницата со апликации"
+    "Others" : "Останати"
 },
 "nplurals=2; plural=(n % 10 == 1 && n % 100 != 11) ? 0 : 1;");

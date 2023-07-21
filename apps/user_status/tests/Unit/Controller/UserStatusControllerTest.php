@@ -315,7 +315,8 @@ class UserStatusControllerTest extends TestCase {
 	public function setCustomMessageDataProvider(): array {
 		return [
 			['👨🏽‍💻', 'Busy developing the status feature', 500, true, false, null, false, null],
-			['👨🏽‍💻', '', 500, true, false, null, false, null, true],
+			['👨🏽‍💻', '', 500, true, false, null, false, null, false],
+			['👨🏽‍💻', '', 0, true, false, null, false, null, true],
 			['👨🏽‍💻', 'Busy developing the status feature', 500, false, true, new InvalidClearAtException('Original exception message'), true,
 				'New user-status for "john.doe" was rejected due to an invalid clearAt value "500"'],
 			['👨🏽‍💻', 'Busy developing the status feature', 500, false, true, new InvalidStatusIconException('Original exception message'), true,
@@ -323,15 +324,6 @@ class UserStatusControllerTest extends TestCase {
 			['👨🏽‍💻', 'Busy developing the status feature', 500, false, true, new StatusMessageTooLongException('Original exception message'), true,
 				'New user-status for "john.doe" was rejected due to a too long status message.'],
 		];
-	}
-
-	public function testClearStatus(): void {
-		$this->service->expects($this->once())
-			->method('clearStatus')
-			->with('john.doe');
-
-		$response = $this->controller->clearStatus();
-		$this->assertEquals([], $response->getData());
 	}
 
 	public function testClearMessage(): void {

@@ -55,15 +55,9 @@ OC.L10N.register(
     "Office documents" : "Documenti di Office",
     "PDF documents" : "Documenti PDF",
     "Custom mimetype" : "Tipo MIME personalizzato",
-    "Select a tag" : "Seleziona un'etichetta",
-    "No results" : "Nessun risultato",
-    "%s (invisible)" : "%s (invisibile)",
-    "%s (restricted)" : "%s (limitato)",
     "Please enter a valid time span" : "Digita un intervallo temporale valido",
     "Select a request URL" : "Seleziona un URL di richiesta",
-    "Predefined URLs" : "URL predefiniti",
     "Files WebDAV" : "File WebDAV",
-    "Others" : "Altri",
     "Custom URL" : "URL personalizzato",
     "Select a user agent" : "Seleziona user agent",
     "Android client" : "Client Android",
@@ -115,6 +109,7 @@ OC.L10N.register(
     "User group membership" : "Appartenenza ai gruppi degli utenti",
     "is member of" : "è membro di",
     "is not member of" : "non è membro di",
-    "Browse the app store" : "Visita il negozio delle applicazioni"
+    "Predefined URLs" : "URL predefiniti",
+    "Others" : "Altri"
 },
-"nplurals=2; plural=(n != 1);");
+"nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;");

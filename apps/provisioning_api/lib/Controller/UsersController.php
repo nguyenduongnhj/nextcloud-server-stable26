@@ -24,6 +24,7 @@ declare(strict_types=1);
  * @author Thomas Müller <thomas.mueller@tmit.eu>
  * @author Tom Needham <tom@owncloud.com>
  * @author Vincent Petry <vincent@nextcloud.com>
+ * @author Kate Döen <kate.doeen@nextcloud.com>
  *
  * @license AGPL-3.0
  *
@@ -40,15 +41,14 @@ declare(strict_types=1);
  * along with this program. If not, see <http://www.gnu.org/licenses/>
  *
  */
+
 namespace OCA\Provisioning_API\Controller;
 
 use InvalidArgumentException;
 use libphonenumber\NumberParseException;
-use libphonenumber\PhoneNumber;
 use libphonenumber\PhoneNumberFormat;
 use libphonenumber\PhoneNumberUtil;
 use OC\Authentication\Token\RemoteWipe;
-use OC\HintException;
 use OC\KnownUser\KnownUserService;
 use OC\User\Backend;
 use OCA\Settings\Mailer\NewUserMailHelper;
@@ -60,6 +60,8 @@ use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCS\OCSException;
 use OCP\AppFramework\OCS\OCSForbiddenException;
 use OCP\AppFramework\OCSController;
+use OCP\EventDispatcher\IEventDispatcher;
+use OCP\HintException;
 use OCP\IConfig;
 use OCP\IGroup;
 use OCP\IGroupManager;
@@ -69,14 +71,12 @@ use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
-use OCP\Security\ISecureRandom;
 use OCP\Security\Events\GenerateSecurePasswordEvent;
-use OCP\EventDispatcher\IEventDispatcher;
+use OCP\Security\ISecureRandom;
 use OCP\User\Backend\ISetDisplayNameBackend;
 use Psr\Log\LoggerInterface;
 
 class UsersController extends AUserData {
-
 	/** @var IURLGenerator */
 	protected $urlGenerator;
 	/** @var LoggerInterface */
@@ -94,29 +94,33 @@ class UsersController extends AUserData {
 	/** @var IEventDispatcher */
 	private $eventDispatcher;
 
-	public function __construct(string $appName,
-								IRequest $request,
-								IUserManager $userManager,
-								IConfig $config,
-								IGroupManager $groupManager,
-								IUserSession $userSession,
-								IAccountManager $accountManager,
-								IURLGenerator $urlGenerator,
-								LoggerInterface $logger,
-								IFactory $l10nFactory,
-								NewUserMailHelper $newUserMailHelper,
-								ISecureRandom $secureRandom,
-								RemoteWipe $remoteWipe,
-								KnownUserService $knownUserService,
-								IEventDispatcher $eventDispatcher) {
-		parent::__construct($appName,
-							$request,
-							$userManager,
-							$config,
-							$groupManager,
-							$userSession,
-							$accountManager,
-							$l10nFactory);
+	public function __construct(
+		string $appName,
+		IRequest $request,
+		IUserManager $userManager,
+		IConfig $config,
+		IGroupManager $groupManager,
+		IUserSession $userSession,
+		IAccountManager $accountManager,
+		IURLGenerator $urlGenerator,
+		LoggerInterface $logger,
+		IFactory $l10nFactory,
+		NewUserMailHelper $newUserMailHelper,
+		ISecureRandom $secureRandom,
+		RemoteWipe $remoteWipe,
+		KnownUserService $knownUserService,
+		IEventDispatcher $eventDispatcher
+	) {
+		parent::__construct(
+			$appName,
+			$request,
+			$userManager,
+			$config,
+			$groupManager,
+			$userSession,
+			$accountManager,
+			$l10nFactory
+		);
 
 		$this->urlGenerator = $urlGenerator;
 		$this->logger = $logger;
@@ -240,7 +244,7 @@ class UsersController extends AUserData {
 			foreach ($phoneNumbers as $phone) {
 				try {
 					$phoneNumber = $phoneUtil->parse($phone, $location);
-					if ($phoneNumber instanceof PhoneNumber && $phoneUtil->isValidNumber($phoneNumber)) {
+					if ($phoneUtil->isValidNumber($phoneNumber)) {
 						$normalizedNumber = $phoneUtil->format($phoneNumber, PhoneNumberFormat::E164);
 						$normalizedNumberToKey[$normalizedNumber] = (string) $key;
 					}
@@ -253,7 +257,7 @@ class UsersController extends AUserData {
 					// when it's different to the user's given region.
 					try {
 						$phoneNumber = $phoneUtil->parse($phone, $defaultPhoneRegion);
-						if ($phoneNumber instanceof PhoneNumber && $phoneUtil->isValidNumber($phoneNumber)) {
+						if ($phoneUtil->isValidNumber($phoneNumber)) {
 							$normalizedNumber = $phoneUtil->format($phoneNumber, PhoneNumberFormat::E164);
 							$normalizedNumberToKey[$normalizedNumber] = (string) $key;
 						}
@@ -325,14 +329,17 @@ class UsersController extends AUserData {
 	 * @return DataResponse
 	 * @throws OCSException
 	 */
-	public function addUser(string $userid,
-							string $password = '',
-							string $displayName = '',
-							string $email = '',
-							array $groups = [],
-							array $subadmin = [],
-							string $quota = '',
-							string $language = ''): DataResponse {
+	public function addUser(
+		string $userid,
+		string $password = '',
+		string $displayName = '',
+		string $email = '',
+		array $groups = [],
+		array $subadmin = [],
+		string $quota = '',
+		string $language = '',
+		?string $manager = null,
+	): DataResponse {
 		$user = $this->userSession->getUser();
 		$isAdmin = $this->groupManager->isAdmin($user->getUID());
 		$subAdminManager = $this->groupManager->getSubAdmin();
@@ -343,16 +350,16 @@ class UsersController extends AUserData {
 
 		if ($this->userManager->userExists($userid)) {
 			$this->logger->error('Failed addUser attempt: User already exists.', ['app' => 'ocs_api']);
-			throw new OCSException('User already exists', 102);
+			throw new OCSException($this->l10nFactory->get('provisioning_api')->t('User already exists'), 102);
 		}
 
 		if ($groups !== []) {
 			foreach ($groups as $group) {
 				if (!$this->groupManager->groupExists($group)) {
-					throw new OCSException('group '.$group.' does not exist', 104);
+					throw new OCSException('group ' . $group . ' does not exist', 104);
 				}
 				if (!$isAdmin && !$subAdminManager->isSubAdminOfGroup($user, $this->groupManager->get($group))) {
-					throw new OCSException('insufficient privileges for group '. $group, 105);
+					throw new OCSException('insufficient privileges for group ' . $group, 105);
 				}
 			}
 		} else {
@@ -367,7 +374,7 @@ class UsersController extends AUserData {
 				$group = $this->groupManager->get($groupid);
 				// Check if group exists
 				if ($group === null) {
-					throw new OCSException('Subadmin group does not exist',  102);
+					throw new OCSException('Subadmin group does not exist', 102);
 				}
 				// Check if trying to make subadmin of admin group
 				if ($group->getGID() === 'admin') {
@@ -382,6 +389,9 @@ class UsersController extends AUserData {
 		}
 
 		$generatePasswordResetToken = false;
+		if (strlen($password) > IUserManager::MAX_PASSWORD_LENGTH) {
+			throw new OCSException('Invalid password value', 101);
+		}
 		if ($password === '') {
 			if ($email === '') {
 				throw new OCSException('To send a password link to the user an email address is required.', 108);
@@ -419,7 +429,14 @@ class UsersController extends AUserData {
 			}
 
 			if ($displayName !== '') {
-				$this->editUser($userid, self::USER_FIELD_DISPLAYNAME, $displayName);
+				try {
+					$this->editUser($userid, self::USER_FIELD_DISPLAYNAME, $displayName);
+				} catch (OCSException $e) {
+					if ($newUser instanceof IUser) {
+						$newUser->delete();
+					}
+					throw $e;
+				}
 			}
 
 			if ($quota !== '') {
@@ -428,6 +445,15 @@ class UsersController extends AUserData {
 
 			if ($language !== '') {
 				$this->editUser($userid, self::USER_FIELD_LANGUAGE, $language);
+			}
+
+			/**
+			 * null -> nothing sent
+			 * '' -> unset manager
+			 * else -> set manager
+			 */
+			if ($manager !== null) {
+				$this->editUser($userid, self::USER_FIELD_MANAGER, $manager);
 			}
 
 			// Send new user mail only if a mail is set
@@ -440,7 +466,8 @@ class UsersController extends AUserData {
 					} catch (\Exception $e) {
 						// Mail could be failing hard or just be plain not configured
 						// Logging error as it is the hardest of the two
-						$this->logger->error("Unable to send the invitation mail to $email",
+						$this->logger->error(
+							"Unable to send the invitation mail to $email",
 							[
 								'app' => 'ocs_api',
 								'exception' => $e,
@@ -452,7 +479,8 @@ class UsersController extends AUserData {
 
 			return new DataResponse(['id' => $userid]);
 		} catch (HintException $e) {
-			$this->logger->warning('Failed addUser attempt with hint exception.',
+			$this->logger->warning(
+				'Failed addUser attempt with hint exception.',
 				[
 					'app' => 'ocs_api',
 					'exception' => $e,
@@ -460,7 +488,8 @@ class UsersController extends AUserData {
 			);
 			throw new OCSException($e->getHint(), 107);
 		} catch (OCSException $e) {
-			$this->logger->warning('Failed addUser attempt with ocs exeption.',
+			$this->logger->warning(
+				'Failed addUser attempt with ocs exception.',
 				[
 					'app' => 'ocs_api',
 					'exception' => $e,
@@ -468,7 +497,8 @@ class UsersController extends AUserData {
 			);
 			throw $e;
 		} catch (InvalidArgumentException $e) {
-			$this->logger->error('Failed addUser attempt with invalid argument exeption.',
+			$this->logger->error(
+				'Failed addUser attempt with invalid argument exception.',
 				[
 					'app' => 'ocs_api',
 					'exception' => $e,
@@ -476,7 +506,8 @@ class UsersController extends AUserData {
 			);
 			throw new OCSException($e->getMessage(), 101);
 		} catch (\Exception $e) {
-			$this->logger->error('Failed addUser attempt with exception.',
+			$this->logger->error(
+				'Failed addUser attempt with exception.',
 				[
 					'app' => 'ocs_api',
 					'exception' => $e
@@ -524,10 +555,6 @@ class UsersController extends AUserData {
 		$user = $this->userSession->getUser();
 		if ($user) {
 			$data = $this->getUserData($user->getUID(), true);
-			// rename "displayname" to "display-name" only for this call to keep
-			// the API stable.
-			$data['display-name'] = $data['displayname'];
-			unset($data['displayname']);
 			return new DataResponse($data);
 		}
 
@@ -573,8 +600,10 @@ class UsersController extends AUserData {
 			}
 
 			$subAdminManager = $this->groupManager->getSubAdmin();
-			if (!$this->groupManager->isAdmin($currentLoggedInUser->getUID())
-				&& !$subAdminManager->isUserAccessible($currentLoggedInUser, $targetUser)) {
+			if (
+				!$this->groupManager->isAdmin($currentLoggedInUser->getUID())
+				&& !$subAdminManager->isUserAccessible($currentLoggedInUser, $targetUser)
+			) {
 				throw new OCSException('', OCSController::RESPOND_NOT_FOUND);
 			}
 		} else {
@@ -583,8 +612,10 @@ class UsersController extends AUserData {
 
 		// Editing self (display, email)
 		if ($this->config->getSystemValue('allow_user_to_change_display_name', true) !== false) {
-			if ($targetUser->getBackend() instanceof ISetDisplayNameBackend
-				|| $targetUser->getBackend()->implementsActions(Backend::SET_DISPLAYNAME)) {
+			if (
+				$targetUser->getBackend() instanceof ISetDisplayNameBackend
+				|| $targetUser->getBackend()->implementsActions(Backend::SET_DISPLAYNAME)
+			) {
 				$permittedFields[] = IAccountManager::PROPERTY_DISPLAYNAME;
 			}
 			$permittedFields[] = IAccountManager::PROPERTY_EMAIL;
@@ -595,6 +626,12 @@ class UsersController extends AUserData {
 		$permittedFields[] = IAccountManager::PROPERTY_ADDRESS;
 		$permittedFields[] = IAccountManager::PROPERTY_WEBSITE;
 		$permittedFields[] = IAccountManager::PROPERTY_TWITTER;
+		$permittedFields[] = IAccountManager::PROPERTY_FEDIVERSE;
+		$permittedFields[] = IAccountManager::PROPERTY_ORGANISATION;
+		$permittedFields[] = IAccountManager::PROPERTY_ROLE;
+		$permittedFields[] = IAccountManager::PROPERTY_HEADLINE;
+		$permittedFields[] = IAccountManager::PROPERTY_BIOGRAPHY;
+		$permittedFields[] = IAccountManager::PROPERTY_PROFILE_ENABLED;
 
 		return new DataResponse($permittedFields);
 	}
@@ -603,6 +640,7 @@ class UsersController extends AUserData {
 	 * @NoAdminRequired
 	 * @NoSubAdminRequired
 	 * @PasswordConfirmationRequired
+	 * @UserRateThrottle(limit=5, period=60)
 	 *
 	 * @throws OCSException
 	 */
@@ -695,6 +733,7 @@ class UsersController extends AUserData {
 	 * @NoAdminRequired
 	 * @NoSubAdminRequired
 	 * @PasswordConfirmationRequired
+	 * @UserRateThrottle(limit=50, period=600)
 	 *
 	 * edit users
 	 *
@@ -716,8 +755,10 @@ class UsersController extends AUserData {
 		if ($targetUser->getUID() === $currentLoggedInUser->getUID()) {
 			// Editing self (display, email)
 			if ($this->config->getSystemValue('allow_user_to_change_display_name', true) !== false) {
-				if ($targetUser->getBackend() instanceof ISetDisplayNameBackend
-					|| $targetUser->getBackend()->implementsActions(Backend::SET_DISPLAYNAME)) {
+				if (
+					$targetUser->getBackend() instanceof ISetDisplayNameBackend
+					|| $targetUser->getBackend()->implementsActions(Backend::SET_DISPLAYNAME)
+				) {
 					$permittedFields[] = self::USER_FIELD_DISPLAYNAME;
 					$permittedFields[] = IAccountManager::PROPERTY_DISPLAYNAME;
 				}
@@ -731,13 +772,17 @@ class UsersController extends AUserData {
 
 			$permittedFields[] = self::USER_FIELD_PASSWORD;
 			$permittedFields[] = self::USER_FIELD_NOTIFICATION_EMAIL;
-			if ($this->config->getSystemValue('force_language', false) === false ||
-				$this->groupManager->isAdmin($currentLoggedInUser->getUID())) {
+			if (
+				$this->config->getSystemValue('force_language', false) === false ||
+				$this->groupManager->isAdmin($currentLoggedInUser->getUID())
+			) {
 				$permittedFields[] = self::USER_FIELD_LANGUAGE;
 			}
 
-			if ($this->config->getSystemValue('force_locale', false) === false ||
-				$this->groupManager->isAdmin($currentLoggedInUser->getUID())) {
+			if (
+				$this->config->getSystemValue('force_locale', false) === false ||
+				$this->groupManager->isAdmin($currentLoggedInUser->getUID())
+			) {
 				$permittedFields[] = self::USER_FIELD_LOCALE;
 			}
 
@@ -745,25 +790,43 @@ class UsersController extends AUserData {
 			$permittedFields[] = IAccountManager::PROPERTY_ADDRESS;
 			$permittedFields[] = IAccountManager::PROPERTY_WEBSITE;
 			$permittedFields[] = IAccountManager::PROPERTY_TWITTER;
+			$permittedFields[] = IAccountManager::PROPERTY_FEDIVERSE;
+			$permittedFields[] = IAccountManager::PROPERTY_ORGANISATION;
+			$permittedFields[] = IAccountManager::PROPERTY_ROLE;
+			$permittedFields[] = IAccountManager::PROPERTY_HEADLINE;
+			$permittedFields[] = IAccountManager::PROPERTY_BIOGRAPHY;
+			$permittedFields[] = IAccountManager::PROPERTY_PROFILE_ENABLED;
 			$permittedFields[] = IAccountManager::PROPERTY_PHONE . self::SCOPE_SUFFIX;
 			$permittedFields[] = IAccountManager::PROPERTY_ADDRESS . self::SCOPE_SUFFIX;
 			$permittedFields[] = IAccountManager::PROPERTY_WEBSITE . self::SCOPE_SUFFIX;
 			$permittedFields[] = IAccountManager::PROPERTY_TWITTER . self::SCOPE_SUFFIX;
+			$permittedFields[] = IAccountManager::PROPERTY_FEDIVERSE . self::SCOPE_SUFFIX;
+			$permittedFields[] = IAccountManager::PROPERTY_ORGANISATION . self::SCOPE_SUFFIX;
+			$permittedFields[] = IAccountManager::PROPERTY_ROLE . self::SCOPE_SUFFIX;
+			$permittedFields[] = IAccountManager::PROPERTY_HEADLINE . self::SCOPE_SUFFIX;
+			$permittedFields[] = IAccountManager::PROPERTY_BIOGRAPHY . self::SCOPE_SUFFIX;
+			$permittedFields[] = IAccountManager::PROPERTY_PROFILE_ENABLED . self::SCOPE_SUFFIX;
 
 			$permittedFields[] = IAccountManager::PROPERTY_AVATAR . self::SCOPE_SUFFIX;
 
-			// If admin they can edit their own quota
+			// If admin they can edit their own quota and manager
 			if ($this->groupManager->isAdmin($currentLoggedInUser->getUID())) {
 				$permittedFields[] = self::USER_FIELD_QUOTA;
+				$permittedFields[] = self::USER_FIELD_MANAGER;
+
 			}
 		} else {
 			// Check if admin / subadmin
 			$subAdminManager = $this->groupManager->getSubAdmin();
-			if ($this->groupManager->isAdmin($currentLoggedInUser->getUID())
-			|| $subAdminManager->isUserAccessible($currentLoggedInUser, $targetUser)) {
+			if (
+				$this->groupManager->isAdmin($currentLoggedInUser->getUID())
+				|| $subAdminManager->isUserAccessible($currentLoggedInUser, $targetUser)
+			) {
 				// They have permissions over the user
-				if ($targetUser->getBackend() instanceof ISetDisplayNameBackend
-					|| $targetUser->getBackend()->implementsActions(Backend::SET_DISPLAYNAME)) {
+				if (
+					$targetUser->getBackend() instanceof ISetDisplayNameBackend
+					|| $targetUser->getBackend()->implementsActions(Backend::SET_DISPLAYNAME)
+				) {
 					$permittedFields[] = self::USER_FIELD_DISPLAYNAME;
 					$permittedFields[] = IAccountManager::PROPERTY_DISPLAYNAME;
 				}
@@ -776,8 +839,15 @@ class UsersController extends AUserData {
 				$permittedFields[] = IAccountManager::PROPERTY_ADDRESS;
 				$permittedFields[] = IAccountManager::PROPERTY_WEBSITE;
 				$permittedFields[] = IAccountManager::PROPERTY_TWITTER;
+				$permittedFields[] = IAccountManager::PROPERTY_FEDIVERSE;
+				$permittedFields[] = IAccountManager::PROPERTY_ORGANISATION;
+				$permittedFields[] = IAccountManager::PROPERTY_ROLE;
+				$permittedFields[] = IAccountManager::PROPERTY_HEADLINE;
+				$permittedFields[] = IAccountManager::PROPERTY_BIOGRAPHY;
+				$permittedFields[] = IAccountManager::PROPERTY_PROFILE_ENABLED;
 				$permittedFields[] = self::USER_FIELD_QUOTA;
 				$permittedFields[] = self::USER_FIELD_NOTIFICATION_EMAIL;
+				$permittedFields[] = self::USER_FIELD_MANAGER;
 			} else {
 				// No rights
 				throw new OCSException('', OCSController::RESPOND_NOT_FOUND);
@@ -791,7 +861,11 @@ class UsersController extends AUserData {
 		switch ($key) {
 			case self::USER_FIELD_DISPLAYNAME:
 			case IAccountManager::PROPERTY_DISPLAYNAME:
-				$targetUser->setDisplayName($value);
+				try {
+					$targetUser->setDisplayName($value);
+				} catch (InvalidArgumentException $e) {
+					throw new OCSException($e->getMessage(), 101);
+				}
 				break;
 			case self::USER_FIELD_QUOTA:
 				$quota = $value;
@@ -802,7 +876,7 @@ class UsersController extends AUserData {
 						$quota = \OCP\Util::computerFileSize($quota);
 					}
 					if ($quota === false) {
-						throw new OCSException('Invalid quota value '.$value, 102);
+						throw new OCSException('Invalid quota value ' . $value, 102);
 					}
 					if ($quota === -1) {
 						$quota = 'none';
@@ -823,8 +897,14 @@ class UsersController extends AUserData {
 				}
 				$targetUser->setQuota($quota);
 				break;
+			case self::USER_FIELD_MANAGER:
+				$targetUser->setManagerUids([$value]);
+				break;
 			case self::USER_FIELD_PASSWORD:
 				try {
+					if (strlen($value) > IUserManager::MAX_PASSWORD_LENGTH) {
+						throw new OCSException('Invalid password value', 102);
+					}
 					if (!$targetUser->canChangePassword()) {
 						throw new OCSException('Setting the password is not supported by the users backend', 103);
 					}
@@ -877,11 +957,11 @@ class UsersController extends AUserData {
 				if (filter_var($value, FILTER_VALIDATE_EMAIL) && $value !== $targetUser->getSystemEMailAddress()) {
 					$userAccount = $this->accountManager->getAccount($targetUser);
 					$mailCollection = $userAccount->getPropertyCollection(IAccountManager::COLLECTION_EMAIL);
-					foreach ($mailCollection->getProperties() as $property) {
-						if ($property->getValue() === $value) {
-							break;
-						}
+
+					if ($mailCollection->getPropertyByValue($value)) {
+						throw new OCSException('', 102);
 					}
+
 					$mailCollection->addPropertyWithDefaults($value);
 					$this->accountManager->updateAccount($userAccount);
 				} else {
@@ -892,6 +972,11 @@ class UsersController extends AUserData {
 			case IAccountManager::PROPERTY_ADDRESS:
 			case IAccountManager::PROPERTY_WEBSITE:
 			case IAccountManager::PROPERTY_TWITTER:
+			case IAccountManager::PROPERTY_FEDIVERSE:
+			case IAccountManager::PROPERTY_ORGANISATION:
+			case IAccountManager::PROPERTY_ROLE:
+			case IAccountManager::PROPERTY_HEADLINE:
+			case IAccountManager::PROPERTY_BIOGRAPHY:
 				$userAccount = $this->accountManager->getAccount($targetUser);
 				try {
 					$userProperty = $userAccount->getProperty($key);
@@ -908,6 +993,22 @@ class UsersController extends AUserData {
 				} catch (PropertyDoesNotExistException $e) {
 					$userAccount->setProperty($key, $value, IAccountManager::SCOPE_PRIVATE, IAccountManager::NOT_VERIFIED);
 				}
+				try {
+					$this->accountManager->updateAccount($userAccount);
+				} catch (InvalidArgumentException $e) {
+					throw new OCSException('Invalid ' . $e->getMessage(), 102);
+				}
+				break;
+			case IAccountManager::PROPERTY_PROFILE_ENABLED:
+				$userAccount = $this->accountManager->getAccount($targetUser);
+				try {
+					$userProperty = $userAccount->getProperty($key);
+					if ($userProperty->getValue() !== $value) {
+						$userProperty->setValue($value);
+					}
+				} catch (PropertyDoesNotExistException $e) {
+					$userAccount->setProperty($key, $value, IAccountManager::SCOPE_LOCAL, IAccountManager::NOT_VERIFIED);
+				}
 				$this->accountManager->updateAccount($userAccount);
 				break;
 			case IAccountManager::PROPERTY_DISPLAYNAME . self::SCOPE_SUFFIX:
@@ -916,6 +1017,12 @@ class UsersController extends AUserData {
 			case IAccountManager::PROPERTY_ADDRESS . self::SCOPE_SUFFIX:
 			case IAccountManager::PROPERTY_WEBSITE . self::SCOPE_SUFFIX:
 			case IAccountManager::PROPERTY_TWITTER . self::SCOPE_SUFFIX:
+			case IAccountManager::PROPERTY_FEDIVERSE . self::SCOPE_SUFFIX:
+			case IAccountManager::PROPERTY_ORGANISATION . self::SCOPE_SUFFIX:
+			case IAccountManager::PROPERTY_ROLE . self::SCOPE_SUFFIX:
+			case IAccountManager::PROPERTY_HEADLINE . self::SCOPE_SUFFIX:
+			case IAccountManager::PROPERTY_BIOGRAPHY . self::SCOPE_SUFFIX:
+			case IAccountManager::PROPERTY_PROFILE_ENABLED . self::SCOPE_SUFFIX:
 			case IAccountManager::PROPERTY_AVATAR . self::SCOPE_SUFFIX:
 				$propertyName = substr($key, 0, strlen($key) - strlen(self::SCOPE_SUFFIX));
 				$userAccount = $this->accountManager->getAccount($targetUser);
@@ -1217,7 +1324,7 @@ class UsersController extends AUserData {
 		}
 		// Check if group exists
 		if ($group === null) {
-			throw new OCSException('Group does not exist',  102);
+			throw new OCSException('Group does not exist', 102);
 		}
 		// Check if trying to make subadmin of admin group
 		if ($group->getGID() === 'admin') {
@@ -1300,8 +1407,10 @@ class UsersController extends AUserData {
 
 		// Check if admin / subadmin
 		$subAdminManager = $this->groupManager->getSubAdmin();
-		if (!$subAdminManager->isUserAccessible($currentLoggedInUser, $targetUser)
-			&& !$this->groupManager->isAdmin($currentLoggedInUser->getUID())) {
+		if (
+			!$subAdminManager->isUserAccessible($currentLoggedInUser, $targetUser)
+			&& !$this->groupManager->isAdmin($currentLoggedInUser->getUID())
+		) {
 			// No rights
 			throw new OCSException('', OCSController::RESPOND_NOT_FOUND);
 		}
@@ -1315,7 +1424,8 @@ class UsersController extends AUserData {
 			$emailTemplate = $this->newUserMailHelper->generateTemplate($targetUser, false);
 			$this->newUserMailHelper->sendMail($targetUser, $emailTemplate);
 		} catch (\Exception $e) {
-			$this->logger->error("Can't send new user mail to $email",
+			$this->logger->error(
+				"Can't send new user mail to $email",
 				[
 					'app' => 'settings',
 					'exception' => $e,

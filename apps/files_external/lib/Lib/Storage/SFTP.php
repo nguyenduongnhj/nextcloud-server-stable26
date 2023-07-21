@@ -63,7 +63,7 @@ class SFTP extends \OC\Files\Storage\Common {
 	 */
 	private function splitHost($host) {
 		$input = $host;
-		if (strpos($host, '://') === false) {
+		if (!str_contains($host, '://')) {
 			// add a protocol to fix parse_url behavior with ipv6
 			$host = 'http://' . $host;
 		}
@@ -327,6 +327,9 @@ class SFTP extends \OC\Files\Storage\Common {
 	public function filetype($path) {
 		try {
 			$stat = $this->getConnection()->stat($this->absPath($path));
+			if (!is_array($stat) || !array_key_exists('type', $stat)) {
+				return false;
+			}
 			if ((int) $stat['type'] === NET_SFTP_TYPE_REGULAR) {
 				return 'file';
 			}

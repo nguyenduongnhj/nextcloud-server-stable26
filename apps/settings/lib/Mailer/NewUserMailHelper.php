@@ -35,6 +35,7 @@ use OCP\IConfig;
 use OCP\IURLGenerator;
 use OCP\IUser;
 use OCP\L10N\IFactory;
+use OCP\Mail\Headers\AutoSubmitted;
 use OCP\Mail\IEMailTemplate;
 use OCP\Mail\IMailer;
 use OCP\Security\ICrypto;
@@ -104,9 +105,7 @@ class NewUserMailHelper {
 		if ($generatePasswordResetToken) {
 			$token = $this->secureRandom->generate(
 				21,
-				ISecureRandom::CHAR_DIGITS .
-				ISecureRandom::CHAR_LOWER .
-				ISecureRandom::CHAR_UPPER
+				ISecureRandom::CHAR_ALPHANUMERIC
 			);
 			$tokenValue = $this->timeFactory->getTime() . ':' . $token;
 			$mailAddress = (null !== $user->getEMailAddress()) ? $user->getEMailAddress() : '';
@@ -183,6 +182,7 @@ class NewUserMailHelper {
 		$message->setTo([$email => $user->getDisplayName()]);
 		$message->setFrom([$this->fromAddress => $this->themingDefaults->getName()]);
 		$message->useTemplate($emailTemplate);
+		$message->setAutoSubmitted(AutoSubmitted::VALUE_AUTO_GENERATED);
 		$this->mailer->send($message);
 	}
 }

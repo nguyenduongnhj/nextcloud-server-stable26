@@ -27,8 +27,8 @@ namespace OCA\OAuth2\Tests\Controller;
 
 use OC\Authentication\Exceptions\ExpiredTokenException;
 use OC\Authentication\Exceptions\InvalidTokenException;
-use OC\Authentication\Token\DefaultToken;
 use OC\Authentication\Token\IProvider as TokenProvider;
+use OC\Authentication\Token\PublicKeyToken;
 use OC\Security\Bruteforce\Throttler;
 use OCA\OAuth2\Controller\OauthApiController;
 use OCA\OAuth2\Db\AccessToken;
@@ -43,7 +43,13 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\IRequest;
 use OCP\Security\ICrypto;
 use OCP\Security\ISecureRandom;
+use Psr\Log\LoggerInterface;
 use Test\TestCase;
+
+/* We have to use this to add a property to the mocked request and avoid warnings about dynamic properties on PHP>=8.2 */
+abstract class RequestMock implements IRequest {
+	public array $server = [];
+}
 
 class OauthApiControllerTest extends TestCase {
 	/** @var IRequest|\PHPUnit\Framework\MockObject\MockObject */
@@ -62,13 +68,15 @@ class OauthApiControllerTest extends TestCase {
 	private $time;
 	/** @var Throttler|\PHPUnit\Framework\MockObject\MockObject */
 	private $throttler;
+	/** @var LoggerInterface|\PHPUnit\Framework\MockObject\MockObject */
+	private $logger;
 	/** @var OauthApiController */
 	private $oauthApiController;
 
 	protected function setUp(): void {
 		parent::setUp();
 
-		$this->request = $this->createMock(IRequest::class);
+		$this->request = $this->createMock(RequestMock::class);
 		$this->crypto = $this->createMock(ICrypto::class);
 		$this->accessTokenMapper = $this->createMock(AccessTokenMapper::class);
 		$this->clientMapper = $this->createMock(ClientMapper::class);
@@ -76,6 +84,7 @@ class OauthApiControllerTest extends TestCase {
 		$this->secureRandom = $this->createMock(ISecureRandom::class);
 		$this->time = $this->createMock(ITimeFactory::class);
 		$this->throttler = $this->createMock(Throttler::class);
+		$this->logger = $this->createMock(LoggerInterface::class);
 
 		$this->oauthApiController = new OauthApiController(
 			'oauth2',
@@ -86,6 +95,7 @@ class OauthApiControllerTest extends TestCase {
 			$this->tokenProvider,
 			$this->secureRandom,
 			$this->time,
+			$this->logger,
 			$this->throttler
 		);
 	}
@@ -193,16 +203,21 @@ class OauthApiControllerTest extends TestCase {
 
 		$client = new Client();
 		$client->setClientIdentifier('clientId');
-		$client->setSecret('clientSecret');
+		$client->setSecret('encryptedClientSecret');
 		$this->clientMapper->method('getByUid')
 			->with(42)
 			->willReturn($client);
 
-		$this->crypto->method('decrypt')
-			->with(
-				'encryptedToken',
-				'validrefresh'
-			)->willReturn('decryptedToken');
+		$this->crypto
+			->method('decrypt')
+			->with($this->callback(function (string $text) {
+				return $text === 'encryptedClientSecret' || $text === 'encryptedToken';
+			}))
+			->willReturnCallback(function (string $text) {
+				return $text === 'encryptedClientSecret'
+					? 'clientSecret'
+					: ($text === 'encryptedToken' ? 'decryptedToken' : '');
+			});
 
 		$this->tokenProvider->method('getTokenById')
 			->with(1337)
@@ -227,18 +242,23 @@ class OauthApiControllerTest extends TestCase {
 
 		$client = new Client();
 		$client->setClientIdentifier('clientId');
-		$client->setSecret('clientSecret');
+		$client->setSecret('encryptedClientSecret');
 		$this->clientMapper->method('getByUid')
 			->with(42)
 			->willReturn($client);
 
-		$this->crypto->method('decrypt')
-			->with(
-				'encryptedToken',
-				'validrefresh'
-			)->willReturn('decryptedToken');
+		$this->crypto
+			->method('decrypt')
+			->with($this->callback(function (string $text) {
+				return $text === 'encryptedClientSecret' || $text === 'encryptedToken';
+			}))
+			->willReturnCallback(function (string $text) {
+				return $text === 'encryptedClientSecret'
+					? 'clientSecret'
+					: ($text === 'encryptedToken' ? 'decryptedToken' : '');
+			});
 
-		$appToken = new DefaultToken();
+		$appToken = new PublicKeyToken();
 		$appToken->setUid('userId');
 		$this->tokenProvider->method('getTokenById')
 			->with(1337)
@@ -267,7 +287,7 @@ class OauthApiControllerTest extends TestCase {
 		$this->tokenProvider->expects($this->once())
 			->method('updateToken')
 			->with(
-				$this->callback(function (DefaultToken $token) {
+				$this->callback(function (PublicKeyToken $token) {
 					return $token->getExpires() === 4600;
 				})
 			);
@@ -319,18 +339,23 @@ class OauthApiControllerTest extends TestCase {
 
 		$client = new Client();
 		$client->setClientIdentifier('clientId');
-		$client->setSecret('clientSecret');
+		$client->setSecret('encryptedClientSecret');
 		$this->clientMapper->method('getByUid')
 			->with(42)
 			->willReturn($client);
 
-		$this->crypto->method('decrypt')
-			->with(
-				'encryptedToken',
-				'validrefresh'
-			)->willReturn('decryptedToken');
+		$this->crypto
+			->method('decrypt')
+			->with($this->callback(function (string $text) {
+				return $text === 'encryptedClientSecret' || $text === 'encryptedToken';
+			}))
+			->willReturnCallback(function (string $text) {
+				return $text === 'encryptedClientSecret'
+					? 'clientSecret'
+					: ($text === 'encryptedToken' ? 'decryptedToken' : '');
+			});
 
-		$appToken = new DefaultToken();
+		$appToken = new PublicKeyToken();
 		$appToken->setUid('userId');
 		$this->tokenProvider->method('getTokenById')
 			->with(1337)
@@ -359,7 +384,7 @@ class OauthApiControllerTest extends TestCase {
 		$this->tokenProvider->expects($this->once())
 			->method('updateToken')
 			->with(
-				$this->callback(function (DefaultToken $token) {
+				$this->callback(function (PublicKeyToken $token) {
 					return $token->getExpires() === 4600;
 				})
 			);
@@ -414,18 +439,23 @@ class OauthApiControllerTest extends TestCase {
 
 		$client = new Client();
 		$client->setClientIdentifier('clientId');
-		$client->setSecret('clientSecret');
+		$client->setSecret('encryptedClientSecret');
 		$this->clientMapper->method('getByUid')
 			->with(42)
 			->willReturn($client);
 
-		$this->crypto->method('decrypt')
-			->with(
-				'encryptedToken',
-				'validrefresh'
-			)->willReturn('decryptedToken');
+		$this->crypto
+			->method('decrypt')
+			->with($this->callback(function (string $text) {
+				return $text === 'encryptedClientSecret' || $text === 'encryptedToken';
+			}))
+			->willReturnCallback(function (string $text) {
+				return $text === 'encryptedClientSecret'
+					? 'clientSecret'
+					: ($text === 'encryptedToken' ? 'decryptedToken' : '');
+			});
 
-		$appToken = new DefaultToken();
+		$appToken = new PublicKeyToken();
 		$appToken->setUid('userId');
 		$this->tokenProvider->method('getTokenById')
 			->with(1337)
@@ -454,7 +484,7 @@ class OauthApiControllerTest extends TestCase {
 		$this->tokenProvider->expects($this->once())
 			->method('updateToken')
 			->with(
-				$this->callback(function (DefaultToken $token) {
+				$this->callback(function (PublicKeyToken $token) {
 					return $token->getExpires() === 4600;
 				})
 			);

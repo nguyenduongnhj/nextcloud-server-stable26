@@ -3,7 +3,7 @@
  *
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -24,8 +24,8 @@ import Vue from 'vue'
 import { translate as t } from '@nextcloud/l10n'
 
 import SidebarView from './views/Sidebar.vue'
-import Sidebar from './services/Sidebar'
-import Tab from './models/Tab'
+import Sidebar from './services/Sidebar.js'
+import Tab from './models/Tab.js'
 
 Vue.prototype.t = t
 
@@ -35,6 +35,8 @@ if (!window.OCA.Files) {
 }
 Object.assign(window.OCA.Files, { Sidebar: new Sidebar() })
 Object.assign(window.OCA.Files.Sidebar, { Tab })
+
+console.debug('OCA.Files.Sidebar initialized')
 
 window.addEventListener('DOMContentLoaded', function() {
 	const contentElement = document.querySelector('body > .content')

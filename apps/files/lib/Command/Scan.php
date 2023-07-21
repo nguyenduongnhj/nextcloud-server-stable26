@@ -37,12 +37,16 @@ use OC\Core\Command\Base;
 use OC\Core\Command\InterruptedException;
 use OC\DB\Connection;
 use OC\DB\ConnectionAdapter;
+use OCP\Files\File;
 use OC\ForbiddenException;
+use OC\Metadata\MetadataManager;
 use OCP\EventDispatcher\IEventDispatcher;
+use OCP\Files\IRootFolder;
 use OCP\Files\Mount\IMountPoint;
 use OCP\Files\NotFoundException;
 use OCP\Files\StorageNotAvailableException;
 use OCP\IUserManager;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -50,19 +54,23 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class Scan extends Base {
+	private IUserManager $userManager;
+	protected float $execTime = 0;
+	protected int $foldersCounter = 0;
+	protected int $filesCounter = 0;
+	protected int $errorsCounter = 0;
+	private IRootFolder $root;
+	private MetadataManager $metadataManager;
 
-	/** @var IUserManager $userManager */
-	private $userManager;
-	/** @var float */
-	protected $execTime = 0;
-	/** @var int */
-	protected $foldersCounter = 0;
-	/** @var int */
-	protected $filesCounter = 0;
-
-	public function __construct(IUserManager $userManager) {
+	public function __construct(
+		IUserManager $userManager,
+		IRootFolder $rootFolder,
+		MetadataManager $metadataManager
+	) {
 		$this->userManager = $userManager;
 		parent::__construct();
+		$this->root = $rootFolder;
+		$this->metadataManager = $metadataManager;
 	}
 
 	protected function configure() {
@@ -81,6 +89,12 @@ class Scan extends Base {
 				'p',
 				InputArgument::OPTIONAL,
 				'limit rescan to this path, eg. --path="/alice/files/Music", the user_id is determined by the path and the user_id parameter and --all are ignored'
+			)
+			->addOption(
+				'generate-metadata',
+				null,
+				InputOption::VALUE_NONE,
+				'Generate metadata for all scanned files'
 			)
 			->addOption(
 				'all',
@@ -105,30 +119,26 @@ class Scan extends Base {
 			);
 	}
 
-	public function checkScanWarning($fullPath, OutputInterface $output) {
-		$normalizedPath = basename(\OC\Files\Filesystem::normalizePath($fullPath));
-		$path = basename($fullPath);
-
-		if ($normalizedPath !== $path) {
-			$output->writeln("\t<error>Entry \"" . $fullPath . '" will not be accessible due to incompatible encoding</error>');
-		}
-	}
-
-	protected function scanFiles($user, $path, OutputInterface $output, $backgroundScan = false, $recursive = true, $homeOnly = false) {
+	protected function scanFiles(string $user, string $path, bool $scanMetadata, OutputInterface $output, bool $backgroundScan = false, bool $recursive = true, bool $homeOnly = false): void {
 		$connection = $this->reconnectToDatabase($output);
 		$scanner = new \OC\Files\Utils\Scanner(
 			$user,
 			new ConnectionAdapter($connection),
-			\OC::$server->query(IEventDispatcher::class),
-			\OC::$server->getLogger()
+			\OC::$server->get(IEventDispatcher::class),
+			\OC::$server->get(LoggerInterface::class)
 		);
 
 		# check on each file/folder if there was a user interrupt (ctrl-c) and throw an exception
-
-		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFile', function ($path) use ($output) {
+		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFile', function (string $path) use ($output, $scanMetadata) {
 			$output->writeln("\tFile\t<info>$path</info>", OutputInterface::VERBOSITY_VERBOSE);
 			++$this->filesCounter;
 			$this->abortIfInterrupted();
+			if ($scanMetadata) {
+				$node = $this->root->get($path);
+				if ($node instanceof File) {
+					$this->metadataManager->generateMetadata($node, false);
+				}
+			}
 		});
 
 		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFolder', function ($path) use ($output) {
@@ -139,14 +149,12 @@ class Scan extends Base {
 
 		$scanner->listen('\OC\Files\Utils\Scanner', 'StorageNotAvailable', function (StorageNotAvailableException $e) use ($output) {
 			$output->writeln('Error while scanning, storage not available (' . $e->getMessage() . ')', OutputInterface::VERBOSITY_VERBOSE);
+			++$this->errorsCounter;
 		});
 
-		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFile', function ($path) use ($output) {
-			$this->checkScanWarning($path, $output);
-		});
-
-		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFolder', function ($path) use ($output) {
-			$this->checkScanWarning($path, $output);
+		$scanner->listen('\OC\Files\Utils\Scanner', 'normalizedNameMismatch', function ($fullPath) use ($output) {
+			$output->writeln("\t<error>Entry \"" . $fullPath . '" will not be accessible due to incompatible encoding</error>');
+			++$this->errorsCounter;
 		});
 
 		try {
@@ -156,16 +164,20 @@ class Scan extends Base {
 				$scanner->scan($path, $recursive, $homeOnly ? [$this, 'filterHomeMount'] : null);
 			}
 		} catch (ForbiddenException $e) {
-			$output->writeln("<error>Home storage for user $user not writable</error>");
+			$output->writeln("<error>Home storage for user $user not writable or 'files' subdirectory missing</error>");
+			$output->writeln('  ' . $e->getMessage());
 			$output->writeln('Make sure you\'re running the scan command only as the user the web server runs as');
+			++$this->errorsCounter;
 		} catch (InterruptedException $e) {
 			# exit the function if ctrl-c has been pressed
 			$output->writeln('Interrupted by user');
 		} catch (NotFoundException $e) {
 			$output->writeln('<error>Path not found: ' . $e->getMessage() . '</error>');
+			++$this->errorsCounter;
 		} catch (\Exception $e) {
 			$output->writeln('<error>Exception during scan: ' . $e->getMessage() . '</error>');
 			$output->writeln('<error>' . $e->getTraceAsString() . '</error>');
+			++$this->errorsCounter;
 		}
 	}
 
@@ -186,11 +198,6 @@ class Scan extends Base {
 			$users = $input->getArgument('user_id');
 		}
 
-		# restrict the verbosity level to VERBOSITY_VERBOSE
-		if ($output->getVerbosity() > OutputInterface::VERBOSITY_VERBOSE) {
-			$output->setVerbosity(OutputInterface::VERBOSITY_VERBOSE);
-		}
-
 		# check quantity of users to be process and show it on the command line
 		$users_total = count($users);
 		if ($users_total === 0) {
@@ -198,7 +205,7 @@ class Scan extends Base {
 			return 1;
 		}
 
-		$this->initTools();
+		$this->initTools($output);
 
 		$user_count = 0;
 		foreach ($users as $user) {
@@ -209,7 +216,7 @@ class Scan extends Base {
 			++$user_count;
 			if ($this->userManager->userExists($user)) {
 				$output->writeln("Starting scan for user $user_count out of $users_total ($user)");
-				$this->scanFiles($user, $path, $output, $input->getOption('unscanned'), !$input->getOption('shallow'), $input->getOption('home-only'));
+				$this->scanFiles($user, $path, $input->getOption('generate-metadata'), $output, $input->getOption('unscanned'), !$input->getOption('shallow'), $input->getOption('home-only'));
 				$output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 			} else {
 				$output->writeln("<error>Unknown user $user_count $user</error>");
@@ -230,15 +237,19 @@ class Scan extends Base {
 	/**
 	 * Initialises some useful tools for the Command
 	 */
-	protected function initTools() {
+	protected function initTools(OutputInterface $output) {
 		// Start the timer
 		$this->execTime = -microtime(true);
 		// Convert PHP errors to exceptions
-		set_error_handler([$this, 'exceptionErrorHandler'], E_ALL);
+		set_error_handler(
+			fn (int $severity, string $message, string $file, int $line): bool =>
+				$this->exceptionErrorHandler($output, $severity, $message, $file, $line),
+			E_ALL
+		);
 	}
 
 	/**
-	 * Processes PHP errors as exceptions in order to be able to keep track of problems
+	 * Processes PHP errors in order to be able to show them in the output
 	 *
 	 * @see https://www.php.net/manual/en/function.set-error-handler.php
 	 *
@@ -246,15 +257,17 @@ class Scan extends Base {
 	 * @param string $message
 	 * @param string $file the filename that the error was raised in
 	 * @param int $line the line number the error was raised
-	 *
-	 * @throws \ErrorException
 	 */
-	public function exceptionErrorHandler($severity, $message, $file, $line) {
-		if (!(error_reporting() & $severity)) {
-			// This error code is not included in error_reporting
-			return;
+	public function exceptionErrorHandler(OutputInterface $output, int $severity, string $message, string $file, int $line): bool {
+		if (($severity === E_DEPRECATED) || ($severity === E_USER_DEPRECATED)) {
+			// Do not show deprecation warnings
+			return false;
 		}
-		throw new \ErrorException($message, 0, $severity, $file, $line);
+		$e = new \ErrorException($message, 0, $severity, $file, $line);
+		$output->writeln('<error>Error during scan: ' . $e->getMessage() . '</error>');
+		$output->writeln('<error>' . $e->getTraceAsString() . '</error>', OutputInterface::VERBOSITY_VERY_VERBOSE);
+		++$this->errorsCounter;
+		return true;
 	}
 
 	/**
@@ -265,28 +278,18 @@ class Scan extends Base {
 		$this->execTime += microtime(true);
 
 		$headers = [
-			'Folders', 'Files', 'Elapsed time'
+			'Folders',
+			'Files',
+			'Errors',
+			'Elapsed time',
 		];
-
-		$this->showSummary($headers, null, $output);
-	}
-
-	/**
-	 * Shows a summary of operations
-	 *
-	 * @param string[] $headers
-	 * @param string[] $rows
-	 * @param OutputInterface $output
-	 */
-	protected function showSummary($headers, $rows, OutputInterface $output) {
 		$niceDate = $this->formatExecTime();
-		if (!$rows) {
-			$rows = [
-				$this->foldersCounter,
-				$this->filesCounter,
-				$niceDate,
-			];
-		}
+		$rows = [
+			$this->foldersCounter,
+			$this->filesCounter,
+			$this->errorsCounter,
+			$niceDate,
+		];
 		$table = new Table($output);
 		$table
 			->setHeaders($headers)
@@ -301,9 +304,9 @@ class Scan extends Base {
 	 * @return string
 	 */
 	protected function formatExecTime() {
-		$secs = round($this->execTime);
+		$secs = (int)round($this->execTime);
 		# convert seconds into HH:MM:SS form
-		return sprintf('%02d:%02d:%02d', ($secs / 3600), ($secs / 60 % 60), $secs % 60);
+		return sprintf('%02d:%02d:%02d', (int)($secs / 3600), ((int)($secs / 60) % 60), $secs % 60);
 	}
 
 	protected function reconnectToDatabase(OutputInterface $output): Connection {

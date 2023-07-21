@@ -20,49 +20,53 @@
   -->
 
 <template>
-	<div v-if="!adding">
+	<div v-if="!adding" id="generate-app-token-section" class="row spacing">
+		<!-- Port to TextField component when available -->
 		<input v-model="deviceName"
 			type="text"
+			:maxlength="120"
 			:disabled="loading"
 			:placeholder="t('settings', 'App name')"
 			@keydown.enter="submit">
-		<button class="button"
-			:disabled="loading"
+		<NcButton :disabled="loading || deviceName.length === 0"
+			type="primary"
 			@click="submit">
 			{{ t('settings', 'Create new app password') }}
-		</button>
+		</NcButton>
 	</div>
-	<div v-else>
+	<div v-else class="spacing">
 		{{ t('settings', 'Use the credentials below to configure your app or device.') }}
 		{{ t('settings', 'For security reasons this password will only be shown once.') }}
 		<div class="app-password-row">
-			<span class="app-password-label">{{ t('settings', 'Username') }}</span>
-			<input :value="loginName"
+			<label for="app-username" class="app-password-label">{{ t('settings', 'Username') }}</label>
+			<input id="app-username"
+				:value="loginName"
 				type="text"
 				class="monospaced"
 				readonly="readonly"
 				@focus="selectInput">
 		</div>
 		<div class="app-password-row">
-			<span class="app-password-label">{{ t('settings', 'Password') }}</span>
-			<input ref="appPassword"
+			<label for="app-password" class="app-password-label">{{ t('settings', 'Password') }}</label>
+			<input id="app-password"
+				ref="appPassword"
 				:value="appPassword"
 				type="text"
 				class="monospaced"
 				readonly="readonly"
 				@focus="selectInput">
-			<a ref="clipboardButton"
-				v-tooltip="copyTooltipOptions"
-				v-clipboard:copy="appPassword"
-				v-clipboard:success="onCopyPassword"
-				v-clipboard:error="onCopyPasswordFailed"
-				class="icon icon-clippy"
-				@mouseover="hoveringCopyButton = true"
-				@mouseleave="hoveringCopyButton = false" />
-			<button class="button"
-				@click="reset">
+			<NcButton type="tertiary"
+				:title="copyTooltipOptions"
+				:aria-label="copyTooltipOptions"
+				@click="copyPassword">
+				<template #icon>
+					<Check v-if="copied" :size="20" />
+					<ContentCopy v-else :size="20" />
+				</template>
+			</NcButton>
+			<NcButton @click="reset">
 				{{ t('settings', 'Done') }}
-			</button>
+			</NcButton>
 		</div>
 		<div class="app-password-row">
 			<span class="app-password-label" />
@@ -78,12 +82,21 @@
 
 <script>
 import QR from '@chenfengyuan/vue-qrcode'
-import confirmPassword from '@nextcloud/password-confirmation'
+import { confirmPassword } from '@nextcloud/password-confirmation'
+import '@nextcloud/password-confirmation/dist/style.css'
+import { showError } from '@nextcloud/dialogs'
 import { getRootUrl } from '@nextcloud/router'
+import NcButton from '@nextcloud/vue/dist/Components/NcButton.js'
+
+import Check from 'vue-material-design-icons/Check.vue'
+import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 
 export default {
 	name: 'AuthTokenSetupDialogue',
 	components: {
+		Check,
+		ContentCopy,
+		NcButton,
 		QR,
 	},
 	props: {
@@ -99,32 +112,17 @@ export default {
 			deviceName: '',
 			appPassword: '',
 			loginName: '',
-			passwordCopied: false,
+			copied: false,
 			showQR: false,
 			qrUrl: '',
-			hoveringCopyButton: false,
 		}
 	},
 	computed: {
 		copyTooltipOptions() {
-			const base = {
-				hideOnTargetClick: false,
-				trigger: 'manual',
+			if (this.copied) {
+				return t('settings', 'Copied!')
 			}
-
-			if (this.passwordCopied) {
-				return {
-					...base,
-					content: t('core', 'Copied!'),
-					show: true,
-				}
-			} else {
-				return {
-					...base,
-					content: t('core', 'Copy'),
-					show: this.hoveringCopyButton,
-				}
-			}
+			return t('settings', 'Copy')
 		},
 	},
 	methods: {
@@ -151,18 +149,24 @@ export default {
 				})
 				.catch(err => {
 					console.error('could not create a new app password', err)
-					OC.Notification.showTemporary(t('core', 'Error while creating device token'))
+					OC.Notification.showTemporary(t('settings', 'Error while creating device token'))
 
 					this.reset()
 				})
 		},
-		onCopyPassword() {
-			this.passwordCopied = true
-			this.$refs.clipboardButton.blur()
-			setTimeout(() => { this.passwordCopied = false }, 3000)
-		},
-		onCopyPasswordFailed() {
-			OC.Notification.showTemporary(t('core', 'Could not copy app password. Please copy it manually.'))
+		async copyPassword() {
+			try {
+				await navigator.clipboard.writeText(this.appPassword)
+				this.copied = true
+			} catch (e) {
+				this.copied = false
+				console.error(e)
+				showError(t('settings', 'Could not copy app password. Please copy it manually.'))
+			} finally {
+				setTimeout(() => {
+					this.copied = false
+				}, 4000)
+			}
 		},
 		reset() {
 			this.adding = false
@@ -179,7 +183,8 @@ export default {
 
 <style lang="scss" scoped>
 	.app-password-row {
-		display: table-row;
+		display: flex;
+		align-items: center;
 
 		.icon {
 			background-size: 16px 16px;
@@ -197,10 +202,32 @@ export default {
 		padding-right: 1em;
 		text-align: right;
 		vertical-align: middle;
+		width: 100px;
+	}
+
+	.row input {
+		height: 44px !important;
+		padding: 7px 12px;
+		margin-right: 12px;
+		width: 200px;
 	}
 
 	.monospaced {
 		width: 245px;
 		font-family: monospace;
+	}
+
+	.button-vue{
+		display:inline-block;
+		margin: 3px 3px 3px 3px;
+	}
+
+	.row {
+		display: flex;
+		align-items: center;
+	}
+
+	.spacing {
+		padding-top: 16px;
 	}
 </style>

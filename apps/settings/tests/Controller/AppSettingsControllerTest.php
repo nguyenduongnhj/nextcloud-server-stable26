@@ -190,7 +190,7 @@ class AppSettingsControllerTest extends TestCase {
 			->willReturn(false);
 		$this->config
 			->expects($this->once())
-			->method('getSystemValue')
+			->method('getSystemValueBool')
 			->with('appstoreenabled', true)
 			->willReturn(true);
 		$this->navigationManager
@@ -209,7 +209,8 @@ class AppSettingsControllerTest extends TestCase {
 					'appstoreEnabled' => true,
 					'bundles' => [],
 					'developerDocumentation' => ''
-				]
+				],
+				'pageTitle' => 'Apps'
 			],
 			'user');
 		$expected->setContentSecurityPolicy($policy);
@@ -224,7 +225,7 @@ class AppSettingsControllerTest extends TestCase {
 		$this->bundleFetcher->expects($this->once())->method('getBundles')->willReturn([]);
 		$this->config
 			->expects($this->once())
-			->method('getSystemValue')
+			->method('getSystemValueBool')
 			->with('appstoreenabled', true)
 			->willReturn(false);
 		$this->navigationManager
@@ -243,7 +244,8 @@ class AppSettingsControllerTest extends TestCase {
 					'appstoreEnabled' => false,
 					'bundles' => [],
 					'developerDocumentation' => ''
-				]
+				],
+				'pageTitle' => 'Apps'
 			],
 			'user');
 		$expected->setContentSecurityPolicy($policy);

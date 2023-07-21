@@ -17,59 +17,67 @@
 	-
 	- You should have received a copy of the GNU Affero General Public License
 	- along with this program. If not, see <http://www.gnu.org/licenses/>.
+	-
 -->
 
 <template>
 	<div>
-		<div class="email-container">
-			<input
+		<div class="email">
+			<input :id="inputId"
 				ref="email"
 				type="email"
-				:name="inputName"
+				autocomplete="email"
 				:placeholder="inputPlaceholder"
 				:value="email"
+				:aria-describedby="helperText ? `${inputId}-helper-text` : ''"
 				autocapitalize="none"
-				autocomplete="on"
 				autocorrect="off"
-				required="true"
 				@input="onEmailChange">
 
-			<div class="email-actions-container">
+			<div class="email__actions-container">
 				<transition name="fade">
-					<span v-if="showCheckmarkIcon" class="icon-checkmark" />
-					<span v-else-if="showErrorIcon" class="icon-error" />
+					<Check v-if="showCheckmarkIcon" :size="20" />
+					<AlertOctagon v-else-if="showErrorIcon" :size="20" />
 				</transition>
 
-				<FederationControl v-if="!primary"
-					class="federation-control"
-					:disabled="federationDisabled"
-					:email="email"
-					:scope.sync="localScope"
-					@update:scope="onScopeChange" />
+				<template v-if="!primary">
+					<FederationControl :readable="propertyReadable"
+						:additional="true"
+						:additional-value="email"
+						:disabled="federationDisabled"
+						:handle-additional-scope-change="saveAdditionalEmailScope"
+						:scope.sync="localScope"
+						@update:scope="onScopeChange" />
+				</template>
 
-				<Actions
-					class="actions-email"
+				<NcActions class="email__actions"
 					:aria-label="t('settings', 'Email options')"
-					:disabled="deleteDisabled"
 					:force-menu="true">
-					<ActionButton
-						:aria-label="deleteEmailLabel"
+					<NcActionButton :aria-label="deleteEmailLabel"
 						:close-after-click="true"
+						:disabled="deleteDisabled"
 						icon="icon-delete"
 						@click.stop.prevent="deleteEmail">
 						{{ deleteEmailLabel }}
-					</ActionButton>
-					<ActionButton v-if="!primary || !isNotificationEmail"
+					</NcActionButton>
+					<NcActionButton v-if="!primary || !isNotificationEmail"
 						:aria-label="setNotificationMailLabel"
 						:close-after-click="true"
 						:disabled="setNotificationMailDisabled"
 						icon="icon-favorite"
 						@click.stop.prevent="setNotificationMail">
 						{{ setNotificationMailLabel }}
-					</ActionButton>
-				</Actions>
+					</NcActionButton>
+				</NcActions>
 			</div>
 		</div>
+
+		<p v-if="helperText"
+			:id="`${inputId}-helper-text`"
+			class="email__helper-text-message email__helper-text-message--error">
+			<AlertCircle class="email__helper-text-message__icon" :size="18" />
+			{{ helperText }}
+		</p>
 
 		<em v-if="isNotificationEmail">
 			{{ t('settings', 'Primary email for password reset and notifications') }}
@@ -78,21 +86,36 @@
 </template>
 
 <script>
-import Actions from '@nextcloud/vue/dist/Components/Actions'
-import ActionButton from '@nextcloud/vue/dist/Components/ActionButton'
-import { showError } from '@nextcloud/dialogs'
+import NcActions from '@nextcloud/vue/dist/Components/NcActions.js'
+import NcActionButton from '@nextcloud/vue/dist/Components/NcActionButton.js'
+import AlertCircle from 'vue-material-design-icons/AlertCircleOutline.vue'
+import AlertOctagon from 'vue-material-design-icons/AlertOctagon.vue'
+import Check from 'vue-material-design-icons/Check.vue'
 import debounce from 'debounce'
 
-import FederationControl from './FederationControl'
-import { VERIFICATION_ENUM } from '../../../constants/AccountPropertyConstants'
-import { savePrimaryEmail, saveAdditionalEmail, saveNotificationEmail, updateAdditionalEmail, removeAdditionalEmail } from '../../../service/PersonalInfoService'
+import FederationControl from '../shared/FederationControl.vue'
+import { handleError } from '../../../utils/handlers.js'
+
+import { ACCOUNT_PROPERTY_READABLE_ENUM, VERIFICATION_ENUM } from '../../../constants/AccountPropertyConstants.js'
+import {
+	removeAdditionalEmail,
+	saveAdditionalEmail,
+	saveAdditionalEmailScope,
+	saveNotificationEmail,
+	savePrimaryEmail,
+	updateAdditionalEmail,
+} from '../../../service/PersonalInfo/EmailService.js'
+import { validateEmail } from '../../../utils/validate.js'
 
 export default {
 	name: 'Email',
 
 	components: {
-		Actions,
-		ActionButton,
+		NcActions,
+		NcActionButton,
+		AlertCircle,
+		AlertOctagon,
+		Check,
 		FederationControl,
 	},
 
@@ -101,17 +124,17 @@ export default {
 			type: String,
 			required: true,
 		},
-		scope: {
-			type: String,
-			required: true,
+		index: {
+			type: Number,
+			default: 0,
 		},
 		primary: {
 			type: Boolean,
 			default: false,
 		},
-		index: {
-			type: Number,
-			default: 0,
+		scope: {
+			type: String,
+			required: true,
 		},
 		activeNotificationEmail: {
 			type: String,
@@ -125,26 +148,33 @@ export default {
 
 	data() {
 		return {
+			propertyReadable: ACCOUNT_PROPERTY_READABLE_ENUM.EMAIL,
 			initialEmail: this.email,
 			localScope: this.scope,
+			saveAdditionalEmailScope,
+			helperText: null,
 			showCheckmarkIcon: false,
 			showErrorIcon: false,
 		}
 	},
 
 	computed: {
-		inputName() {
+		deleteDisabled() {
 			if (this.primary) {
-				return 'email'
+				// Disable for empty primary email as there is nothing to delete
+				// OR when initialEmail (reflects server state) and email (current input) are not the same
+				return this.email === '' || this.initialEmail !== this.email
+			} else if (this.initialEmail !== '') {
+				return this.initialEmail !== this.email
 			}
-			return 'additionalEmail[]'
+			return false
 		},
 
-		inputPlaceholder() {
+		deleteEmailLabel() {
 			if (this.primary) {
-				return t('settings', 'Your email address')
+				return t('settings', 'Remove primary email')
 			}
-			return t('settings', 'Additional email address {index}', { index: this.index + 1 })
+			return t('settings', 'Delete email')
 		},
 
 	  setNotificationMailDisabled() {
@@ -157,35 +187,36 @@ export default {
 			} else if (!this.primary && this.localVerificationState !== VERIFICATION_ENUM.VERIFIED) {
 				return t('settings', 'This address is not confirmed')
 			}
-			return t('settings', 'Set as primary mail')
+			return t('settings', 'Set as primary email')
 		},
 
 		federationDisabled() {
 			return !this.initialEmail
 		},
 
-		deleteDisabled() {
+		inputId() {
 			if (this.primary) {
-				return this.email === ''
+				return 'email'
 			}
-			return this.email !== '' && !this.isValid()
+			return `email-${this.index}`
 		},
 
-		deleteEmailLabel() {
+		inputPlaceholder() {
 			if (this.primary) {
-				return t('settings', 'Remove primary email')
+				return t('settings', 'Your email address')
 			}
-			return t('settings', 'Delete email')
+			return t('settings', 'Additional email address {index}', { index: this.index + 1 })
 		},
 
 		isNotificationEmail() {
-			return (this.email === this.activeNotificationEmail)
-					|| (this.primary && this.activeNotificationEmail === '')
+			return (this.email && this.email === this.activeNotificationEmail)
+				|| (this.primary && this.activeNotificationEmail === '')
 		},
 	},
 
 	mounted() {
 		if (!this.primary && this.initialEmail === '') {
+			// $nextTick is needed here, otherwise it may not always work https://stackoverflow.com/questions/51922767/autofocus-input-on-mount-vue-ios/63485725#63485725
 			this.$nextTick(() => this.$refs.email?.focus())
 		}
 	},
@@ -193,20 +224,24 @@ export default {
 	methods: {
 		onEmailChange(e) {
 			this.$emit('update:email', e.target.value)
-			// $nextTick() ensures that references to this.email further down the chain give the correct non-outdated value
-			this.$nextTick(() => this.debounceEmailChange())
+			this.debounceEmailChange(e.target.value.trim())
 		},
 
-		debounceEmailChange: debounce(async function() {
-			if (this.$refs.email?.checkValidity() || this.email === '') {
+		debounceEmailChange: debounce(async function(email) {
+			this.helperText = null
+			if (this.$refs.email?.validationMessage) {
+				this.helperText = this.$refs.email.validationMessage
+				return
+			}
+			if (validateEmail(email) || email === '') {
 				if (this.primary) {
-					await this.updatePrimaryEmail()
+					await this.updatePrimaryEmail(email)
 				} else {
-					if (this.email) {
+					if (email) {
 						if (this.initialEmail === '') {
-							await this.addAdditionalEmail()
+							await this.addAdditionalEmail(email)
 						} else {
-							await this.updateAdditionalEmail()
+							await this.updateAdditionalEmail(email)
 						}
 					}
 				}
@@ -216,56 +251,77 @@ export default {
 		async deleteEmail() {
 			if (this.primary) {
 				this.$emit('update:email', '')
-				this.$nextTick(async() => await this.updatePrimaryEmail())
+				await this.updatePrimaryEmail('')
 			} else {
 				await this.deleteAdditionalEmail()
 			}
 		},
 
-		async updatePrimaryEmail() {
+		async updatePrimaryEmail(email) {
 			try {
-				const responseData = await savePrimaryEmail(this.email)
-				this.handleResponse(responseData.ocs?.meta?.status)
+				const responseData = await savePrimaryEmail(email)
+				this.handleResponse({
+					email,
+					status: responseData.ocs?.meta?.status,
+				})
 			} catch (e) {
-				if (this.email === '') {
-					this.handleResponse('error', 'Unable to delete primary email address', e)
+				if (email === '') {
+					this.handleResponse({
+						errorMessage: t('settings', 'Unable to delete primary email address'),
+						error: e,
+					})
 				} else {
-					this.handleResponse('error', 'Unable to update primary email address', e)
+					this.handleResponse({
+						errorMessage: t('settings', 'Unable to update primary email address'),
+						error: e,
+					})
 				}
 			}
 		},
 
-		async addAdditionalEmail() {
+		async addAdditionalEmail(email) {
 			try {
-				const responseData = await saveAdditionalEmail(this.email)
-				this.handleResponse(responseData.ocs?.meta?.status)
+				const responseData = await saveAdditionalEmail(email)
+				this.handleResponse({
+					email,
+					status: responseData.ocs?.meta?.status,
+				})
 			} catch (e) {
-				this.handleResponse('error', 'Unable to add additional email address', e)
+				this.handleResponse({
+					errorMessage: t('settings', 'Unable to add additional email address'),
+					error: e,
+				})
 			}
 		},
 
-	  async setNotificationMail() {
+		async setNotificationMail() {
 		  try {
 			  const newNotificationMailValue = (this.primary || this.isNotificationEmail) ? '' : this.initialEmail
 			  const responseData = await saveNotificationEmail(newNotificationMailValue)
-			  this.handleSetNotificationMailResponse({
+			  this.handleResponse({
 				  notificationEmail: newNotificationMailValue,
 				  status: responseData.ocs?.meta?.status,
 			  })
 		  } catch (e) {
-			  this.handleSetNotificationMailResponse({
+			  this.handleResponse({
 				  errorMessage: 'Unable to choose this email for notifications',
 				  error: e,
 			  })
 		  }
-	  },
+		},
 
-		async updateAdditionalEmail() {
+		async updateAdditionalEmail(email) {
 			try {
-				const responseData = await updateAdditionalEmail(this.initialEmail, this.email)
-				this.handleResponse(responseData.ocs?.meta?.status)
+				const responseData = await updateAdditionalEmail(this.initialEmail, email)
+				this.handleResponse({
+					email,
+					status: responseData.ocs?.meta?.status,
+				})
 			} catch (e) {
-				this.handleResponse('error', 'Unable to update additional email address', e)
+				this.handleResponse({
+					errorMessage: t('settings', 'Unable to update additional email address'),
+					error: e,
+				})
 			}
 		},
 
@@ -274,44 +330,35 @@ export default {
 				const responseData = await removeAdditionalEmail(this.initialEmail)
 				this.handleDeleteAdditionalEmail(responseData.ocs?.meta?.status)
 			} catch (e) {
-				this.handleResponse('error', 'Unable to delete additional email address', e)
+				this.handleResponse({
+					errorMessage: t('settings', 'Unable to delete additional email address'),
+					error: e,
+				})
 			}
-		},
-
-		isValid() {
-			return /^\S+$/.test(this.email)
 		},
 
 		handleDeleteAdditionalEmail(status) {
 			if (status === 'ok') {
-				this.$emit('deleteAdditionalEmail')
+				this.$emit('delete-additional-email')
 			} else {
-				this.handleResponse('error', 'Unable to delete additional email address', {})
+				this.handleResponse({
+					errorMessage: t('settings', 'Unable to delete additional email address'),
+				})
 			}
 		},
 
-		handleSetNotificationMailResponse({ notificationEmail, status, errorMessage, error }) {
+		handleResponse({ email, notificationEmail, status, errorMessage, error }) {
 			if (status === 'ok') {
-				this.$emit('update:notification-email', notificationEmail)
+				// Ensure that local state reflects server state
+				if (email) {
+					this.initialEmail = email
+				} else if (notificationEmail !== undefined) {
+					this.$emit('update:notification-email', notificationEmail)
+				}
 				this.showCheckmarkIcon = true
 				setTimeout(() => { this.showCheckmarkIcon = false }, 2000)
 			} else {
-				showError(t('settings', errorMessage))
-				this.logger.error(errorMessage, error)
-				this.showErrorIcon = true
-				setTimeout(() => { this.showErrorIcon = false }, 2000)
-			}
-		},
-
-		handleResponse(status, errorMessage, error) {
-			if (status === 'ok') {
-				// Ensure that local initialEmail state reflects server state
-				this.initialEmail = this.email
-				this.showCheckmarkIcon = true
-				setTimeout(() => { this.showCheckmarkIcon = false }, 2000)
-			} else {
-				showError(t('settings', errorMessage))
-				this.logger.error(errorMessage, error)
+				handleError(error, errorMessage)
 				this.showErrorIcon = true
 				setTimeout(() => { this.showErrorIcon = false }, 2000)
 			}
@@ -325,72 +372,69 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-	.email-container {
-		display: grid;
-		align-items: center;
+.email {
+	display: grid;
+	align-items: center;
 
-		input[type=email] {
-			grid-area: 1 / 1;
-		}
+	input {
+		grid-area: 1 / 1;
+		width: 100%;
+	}
 
-		.email-actions-container {
-			grid-area: 1 / 1;
-			justify-self: flex-end;
-			height: 30px;
+	.email__actions-container {
+		grid-area: 1 / 1;
+		justify-self: flex-end;
+		height: 30px;
 
-			display: flex;
-			gap: 0 2px;
-			margin-right: 5px;
+		display: flex;
+		gap: 0 2px;
+		margin-right: 5px;
 
-			.actions-email {
-				opacity: 0.4 !important;
+		.email__actions {
+			opacity: 0.4 !important;
 
-				&:hover {
-					opacity: 0.8 !important;
-				}
-
-				&::v-deep button {
-					height: 30px !important;
-					min-height: 30px !important;
-					width: 30px !important;
-					min-width: 30px !important;
-				}
+			&:hover,
+			&:focus,
+			&:active {
+				opacity: 0.8 !important;
 			}
 
-			.federation-control {
-				&::v-deep button {
-					// TODO remove this hack
-					padding-bottom: 7px;
-					height: 30px !important;
-					min-height: 30px !important;
-					width: 30px !important;
-					min-width: 30px !important;
-				}
-			}
-
-			.icon-checkmark,
-			.icon-error {
+			&::v-deep button {
 				height: 30px !important;
 				min-height: 30px !important;
 				width: 30px !important;
 				min-width: 30px !important;
-				top: 0;
-				right: 0;
-				float: none;
 			}
 		}
 	}
 
-	.fade-enter-active {
-		transition: opacity 200ms ease-out;
-	}
+	&__helper-text-message {
+		padding: 4px 0;
+		display: flex;
+		align-items: center;
 
-	.fade-leave-active {
-		transition: opacity 300ms ease-out;
-	}
+		&__icon {
+			margin-right: 8px;
+			align-self: start;
+			margin-top: 4px;
+		}
 
-	.fade-enter,
-	.fade-leave-to {
-		opacity: 0;
+		&--error {
+			color: var(--color-error);
+		}
 	}
+}
+
+.fade-enter,
+.fade-leave-to {
+	opacity: 0;
+}
+
+.fade-enter-active {
+	transition: opacity 200ms ease-out;
+}
+
+.fade-leave-active {
+	transition: opacity 300ms ease-out;
+}
 </style>

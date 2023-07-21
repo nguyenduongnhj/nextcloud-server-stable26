@@ -3,7 +3,7 @@
  *
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -24,7 +24,7 @@ import { generateOcsUrl } from '@nextcloud/router'
 import axios from '@nextcloud/axios'
 
 export const getTemplates = async function() {
-	const response = await axios.get(generateOcsUrl('apps/files/api/v1', 2) + 'templates')
+	const response = await axios.get(generateOcsUrl('apps/files/api/v1/templates'))
 	return response.data.ocs.data
 }
 
@@ -36,11 +36,10 @@ export const getTemplates = async function() {
  * @param {string} templateType The template type e.g 'user'
  */
 export const createFromTemplate = async function(filePath, templatePath, templateType) {
-	const response = await axios.post(generateOcsUrl('apps/files/api/v1/templates', 2) + 'create', {
+	const response = await axios.post(generateOcsUrl('apps/files/api/v1/templates/create'), {
 		filePath,
 		templatePath,
 		templateType,
 	})
-
 	return response.data.ocs.data
 }

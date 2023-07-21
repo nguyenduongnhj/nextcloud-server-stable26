@@ -1,6 +1,5 @@
 <template>
-	<div
-		class="row"
+	<div class="row"
 		:class="{'disabled': loading.delete || loading.disable}"
 		:data-id="user.id">
 		<div class="avatar" :class="{'icon-loading-small': loading.delete || loading.disable || loading.wipe}">
@@ -8,21 +7,22 @@
 				alt=""
 				width="32"
 				height="32"
-				:src="generateAvatar(user.id, 32)"
-				:srcset="generateAvatar(user.id, 64)+' 2x, '+generateAvatar(user.id, 128)+' 4x'">
+				:src="generateAvatar(user.id, isDarkTheme)">
 		</div>
 		<!-- dirty hack to ellipsis on two lines -->
 		<div class="name">
-			{{ user.id }}
 			<div class="displayName subtitle">
-				<div v-tooltip="user.displayname.length > 20 ? user.displayname : ''" class="cellText">
-					{{ user.displayname }}
+				<div :title="user.displayname.length > 20 ? user.displayname : ''" class="cellText">
+					<strong>
+						{{ user.displayname }}
+					</strong>
 				</div>
 			</div>
+			{{ user.id }}
 		</div>
 		<div />
 		<div class="mailAddress">
-			<div v-tooltip="user.email !== null && user.email.length > 20 ? user.email : ''" class="cellText">
+			<div :title="user.email !== null && user.email.length > 20 ? user.email : ''" class="cellText">
 				{{ user.email }}
 			</div>
 		</div>
@@ -35,8 +35,7 @@
 		<div class="userQuota">
 			<div class="quota">
 				{{ userQuota }} ({{ usedSpace }})
-				<progress
-					class="quota-user-progress"
+				<progress class="quota-user-progress"
 					:class="{'warn': usedQuota > 80}"
 					:value="usedQuota"
 					max="100" />
@@ -49,29 +48,32 @@
 			<div v-if="showConfig.showUserBackend" class="userBackend">
 				{{ user.backend }}
 			</div>
-			<div v-if="showConfig.showStoragePath" v-tooltip="user.storageLocation" class="storageLocation subtitle">
+			<div v-if="showConfig.showStoragePath" :title="user.storageLocation" class="storageLocation subtitle">
 				{{ user.storageLocation }}
 			</div>
 		</div>
-		<div v-if="showConfig.showLastLogin" v-tooltip.auto="userLastLoginTooltip" class="lastLogin">
+		<div v-if="showConfig.showLastLogin" :title="userLastLoginTooltip" class="lastLogin">
 			{{ userLastLogin }}
 		</div>
-
+		<div class="managers">
+			{{ user.manager }}
+		</div>
 		<div class="userActions">
 			<div v-if="canEdit && !loading.all" class="toggleUserActions">
-				<Actions>
-					<ActionButton icon="icon-rename" @click="toggleEdit">
-						{{ t('settings', 'Edit User') }}
-					</ActionButton>
-				</Actions>
+				<NcActions>
+					<NcActionButton icon="icon-rename"
+						:title="t('settings', 'Edit User')"
+						:aria-label="t('settings', 'Edit User')"
+						@click="toggleEdit" />
+				</NcActions>
 				<div class="userPopoverMenuWrapper">
-					<button
-						v-click-outside="hideMenu"
+					<button v-click-outside="hideMenu"
 						class="icon-more"
+						:aria-expanded="openedMenu"
 						:aria-label="t('settings', 'Toggle user actions menu')"
-						@click.prevent="$emit('toggleMenu')" />
-					<div class="popovermenu" :class="{ 'open': openedMenu }" :aria-expanded="openedMenu">
-						<PopoverMenu :menu="userActions" />
+						@click.prevent="toggleMenu" />
+					<div class="popovermenu" :class="{ 'open': openedMenu }">
+						<NcPopoverMenu :menu="userActions" />
 					</div>
 				</div>
 			</div>
@@ -84,18 +86,18 @@
 </template>
 
 <script>
-import PopoverMenu from '@nextcloud/vue/dist/Components/PopoverMenu'
-import Actions from '@nextcloud/vue/dist/Components/Actions'
-import ActionButton from '@nextcloud/vue/dist/Components/ActionButton'
+import NcPopoverMenu from '@nextcloud/vue/dist/Components/NcPopoverMenu.js'
+import NcActions from '@nextcloud/vue/dist/Components/NcActions.js'
+import NcActionButton from '@nextcloud/vue/dist/Components/NcActionButton.js'
 import ClickOutside from 'vue-click-outside'
 import { getCurrentUser } from '@nextcloud/auth'
-import UserRowMixin from '../../mixins/UserRowMixin'
+import UserRowMixin from '../../mixins/UserRowMixin.js'
 export default {
 	name: 'UserRowSimple',
 	components: {
-		PopoverMenu,
-		ActionButton,
-		Actions,
+		NcPopoverMenu,
+		NcActionButton,
+		NcActions,
 	},
 	directives: {
 		ClickOutside,
@@ -132,6 +134,10 @@ export default {
 		},
 		settings: {
 			type: Object,
+			required: true,
+		},
+		isDarkTheme: {
+			type: Boolean,
 			required: true,
 		},
 	},
@@ -176,8 +182,11 @@ export default {
 		},
 	},
 	methods: {
+		toggleMenu() {
+			this.$emit('update:openedMenu', !this.openedMenu)
+		},
 		hideMenu() {
-			this.$emit('hideMenu')
+			this.$emit('update:openedMenu', false)
 		},
 		toggleEdit() {
 			this.$emit('update:editing', true)

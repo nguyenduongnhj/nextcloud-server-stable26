@@ -10,7 +10,6 @@ OC.L10N.register(
     "Error configuring OAuth2" : "Se presentó un error al configurar OAuth2",
     "Generate keys" : "Generar llaves",
     "Error generating key pair" : "Se presentó un error al generar el juego de llaves",
-    "All users. Type to select user or group." : "Todos los usuarios. Escriba para seleccionar el usuario o grupo",
     "Compatibility with Mac NFD encoding (slow)" : "Compatibilidad con codificación Mac NFD (lenta)",
     "Enable encryption" : "Habilitar encripción",
     "Enable previews" : "Habilitar vistas previas",
@@ -19,7 +18,7 @@ OC.L10N.register(
     "Never" : "Nunca",
     "Once every direct access" : "Una vez cada acceso directo",
     "Read only" : "Solo lectura",
-    "Delete" : "Borrar",
+    "Disconnect" : "Desconectar",
     "Admin defined" : "Administrador definido",
     "Saved" : "Guardado",
     "Save" : "Guardar",
@@ -94,7 +93,7 @@ OC.L10N.register(
     "Username as share" : "Nombre de usuario como elemento compartido",
     "OpenStack Object Storage" : "OpenStack Object Storage",
     "Service name" : "Nombre del servicio",
-    "Request timeout (seconds)" : "Tiemo de vida de la solicitud (segudos)",
+    "Request timeout (seconds)" : "Tiemo de vida de la solicitud (segundos)",
     "The cURL support in PHP is not enabled or installed. Mounting of %s is not possible. Please ask your system administrator to install it." : "El soporte para cURL en PHP no se encuentra habilitado o instalado. El montaje de %s no es posible. Favor de solicitar a su administador su instalación. ",
     "The FTP support in PHP is not enabled or installed. Mounting of %s is not possible. Please ask your system administrator to install it." : "El soporte para FTP en PHP no se encuentra habilitado o instalado. El montaje de %s no es posible. Favor de solicitar a su administador su instalación. ",
     "External storage support" : "Soporte de almacenamiento externo",
@@ -108,10 +107,6 @@ OC.L10N.register(
     "Available for" : "Disponible para",
     "Add storage" : "Agregar almacenamiento",
     "Advanced settings" : "Configuraciones avanzadas",
-    "Allow users to mount external storage" : "Permitir a los usuarios montar almacenamiento externo",
-    "External storages" : "Almacenamiento externo",
-    "(group)" : "(grupo)",
-    "SMB / CIFS" : "SMB / CIFS",
-    "SMB / CIFS using OC login" : "SMB / CIFS usando inicio de sesión OC"
+    "Allow users to mount external storage" : "Permitir a los usuarios montar almacenamiento externo"
 },
-"nplurals=2; plural=(n != 1);");
+"nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;");

@@ -30,7 +30,8 @@ use OCA\UserStatus\Service\StatusService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
-use OCP\AppFramework\Http\JSONResponse;
+use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\OCSController;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IRequest;
@@ -38,7 +39,7 @@ use OCP\IUserSession;
 use OCP\User\Events\UserLiveStatusEvent;
 use OCP\UserStatus\IUserStatus;
 
-class HeartbeatController extends Controller {
+class HeartbeatController extends OCSController {
 
 	/** @var IEventDispatcher */
 	private $eventDispatcher;
@@ -69,33 +70,33 @@ class HeartbeatController extends Controller {
 	 * @NoAdminRequired
 	 *
 	 * @param string $status
-	 * @return JSONResponse
+	 * @return DataResponse
 	 */
-	public function heartbeat(string $status): JSONResponse {
+	public function heartbeat(string $status): DataResponse {
 		if (!\in_array($status, [IUserStatus::ONLINE, IUserStatus::AWAY], true)) {
-			return new JSONResponse([], Http::STATUS_BAD_REQUEST);
+			return new DataResponse([], Http::STATUS_BAD_REQUEST);
 		}
 
 		$user = $this->userSession->getUser();
 		if ($user === null) {
-			return new JSONResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
+			return new DataResponse([], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
-		$this->eventDispatcher->dispatchTyped(
-			new UserLiveStatusEvent(
-				$user,
-				$status,
-				$this->timeFactory->getTime()
-			)
+		$event = new UserLiveStatusEvent(
+			$user,
+			$status,
+			$this->timeFactory->getTime()
 		);
 
-		try {
-			$userStatus = $this->service->findByUserId($user->getUID());
-		} catch (DoesNotExistException $ex) {
-			return new JSONResponse([], Http::STATUS_NO_CONTENT);
+		$this->eventDispatcher->dispatchTyped($event);
+
+		$userStatus = $event->getUserStatus();
+		if (!$userStatus) {
+			return new DataResponse([], Http::STATUS_NO_CONTENT);
 		}
 
-		return new JSONResponse($this->formatStatus($userStatus));
+		/** @psalm-suppress UndefinedInterfaceMethod */
+		return new DataResponse($this->formatStatus($userStatus->getInternal()));
 	}
 
 	private function formatStatus(UserStatus $status): array {

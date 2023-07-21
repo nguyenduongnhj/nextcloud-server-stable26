@@ -10,7 +10,6 @@ OC.L10N.register(
     "Error configuring OAuth2" : "OAuth2-ის კონფიგურირებისას წარმოიშვა შეცდომა",
     "Generate keys" : "გასაღებების გენერირება",
     "Error generating key pair" : "გასაღების წყვილის გენერირებისას წარმოიშვა შეცდომა",
-    "All users. Type to select user or group." : "ყველა მომხმარებელი. მოხმარებლის ან ჯგუფის ასარჩევად დაიწყეთ ბეჭდვა.",
     "Compatibility with Mac NFD encoding (slow)" : "Mac NFD-სთან თავსებადობა (ნელი)",
     "Enable encryption" : "შიფრაციის ამოქმედება",
     "Enable previews" : "პრევიუების ამოქმედება",
@@ -19,7 +18,7 @@ OC.L10N.register(
     "Never" : "არასდროს",
     "Once every direct access" : "ყოველთვის პირდაპირი წვდომისას",
     "Read only" : "მხოლოდ-კითხვადი",
-    "Delete" : "წაშლა",
+    "Disconnect" : "კავშირის გაწყვეტა",
     "Admin defined" : "განსაზღვრულია ადმინისტრატორის მიერ",
     "Delete storage?" : "გავაუქმოთ საცავი?",
     "Saved" : "შენახულია",
@@ -97,6 +96,7 @@ OC.L10N.register(
     "SFTP with secret key login" : "SFTP საიდუმლო გასაღების ლოგინით",
     "Share" : "გაზიარება",
     "Show hidden files" : "დამალული ფაილების ჩვენება",
+    "Timeout" : "დრო ამოიწურა",
     "Username as share" : "მომხმარებლის სახელი გაზიარებად",
     "OpenStack Object Storage" : "OpenStack ობიექტ საცავი",
     "Service name" : "სერვისის სახელი",
@@ -116,10 +116,6 @@ OC.L10N.register(
     "Click to recheck the configuration" : "დააწკაპუნეთ კონფიგურაციის ხელახალი შემოწმებისთვის",
     "Add storage" : "საცავის დამატება",
     "Advanced settings" : "დამატებითი პარამეტრები",
-    "Allow users to mount external storage" : "მივცეთ მომხმარებლებს გარე საცავის მონტაჟის უფლება",
-    "External storages" : "გარე საცავები",
-    "(group)" : "(ჯგუფი)",
-    "SMB / CIFS" : "SMB / CIFS",
-    "SMB / CIFS using OC login" : "SMB / CIFS OC ლოგინით"
+    "Allow users to mount external storage" : "მივცეთ მომხმარებლებს გარე საცავის მონტაჟის უფლება"
 },
 "nplurals=2; plural=(n!=1);");

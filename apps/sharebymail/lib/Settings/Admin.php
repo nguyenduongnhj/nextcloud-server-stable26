@@ -24,27 +24,29 @@
 namespace OCA\ShareByMail\Settings;
 
 use OCP\AppFramework\Http\TemplateResponse;
-use OCP\Settings\ISettings;
+use OCP\AppFramework\Services\IInitialState;
+use OCP\IL10N;
+use OCP\Settings\IDelegatedSettings;
 
-class Admin implements ISettings {
+class Admin implements IDelegatedSettings {
+	private SettingsManager $settingsManager;
+	private IL10N $l;
+	private IInitialState $initialState;
 
-	/** @var SettingsManager */
-	private $settingsManager;
-
-	public function __construct(SettingsManager $settingsManager) {
+	public function __construct(SettingsManager $settingsManager, IL10N $l, IInitialState $initialState) {
 		$this->settingsManager = $settingsManager;
+		$this->l = $l;
+		$this->initialState = $initialState;
 	}
 
 	/**
 	 * @return TemplateResponse
 	 */
 	public function getForm() {
-		$parameters = [
-			'sendPasswordMail' => $this->settingsManager->sendPasswordByMail(),
-			'replyToInitiator' => $this->settingsManager->replyToInitiator()
-		];
+		$this->initialState->provideInitialState('sendPasswordMail', $this->settingsManager->sendPasswordByMail());
+		$this->initialState->provideInitialState('replyToInitiator', $this->settingsManager->replyToInitiator());
 
-		return new TemplateResponse('sharebymail', 'settings-admin', $parameters, '');
+		return new TemplateResponse('sharebymail', 'settings-admin', [], '');
 	}
 
 	/**
@@ -63,5 +65,15 @@ class Admin implements ISettings {
 	 */
 	public function getPriority() {
 		return 40;
+	}
+
+	public function getName(): ?string {
+		return $this->l->t('Share by mail');
+	}
+
+	public function getAuthorizedAppConfig(): array {
+		return [
+			'sharebymail' => ['s/(sendpasswordmail|replyToInitiator)/'],
+		];
 	}
 }

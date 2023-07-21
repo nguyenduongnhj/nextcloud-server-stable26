@@ -5,7 +5,7 @@
  * @author Julius Härtl <jus@bitgrid.net>
  * @author Roeland Jago Douma <roeland@famdouma.nl>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -28,7 +28,7 @@ import { generateOcsUrl } from '@nextcloud/router'
 const scopeValue = loadState('workflowengine', 'scope') === 0 ? 'global' : 'user'
 
 const getApiUrl = (url) => {
-	return generateOcsUrl('apps/workflowengine/api/v1/workflows', 2) + scopeValue + url + '?format=json'
+	return generateOcsUrl('apps/workflowengine/api/v1/workflows/{scopeValue}', { scopeValue }) + url + '?format=json'
 }
 
 export {

@@ -31,7 +31,6 @@
  */
 namespace OCA\User_LDAP\Tests;
 
-use OC\HintException;
 use OC\User\Backend;
 use OC\User\Session;
 use OCA\User_LDAP\Access;
@@ -44,6 +43,7 @@ use OCA\User_LDAP\User\User;
 use OCA\User_LDAP\User_LDAP;
 use OCA\User_LDAP\User_LDAP as UserLDAP;
 use OCA\User_LDAP\UserPluginManager;
+use OCP\HintException;
 use OCP\IConfig;
 use OCP\IUser;
 use OCP\Notification\IManager as INotificationManager;
@@ -815,13 +815,15 @@ class User_LDAPTest extends TestCase {
 
 	private function prepareAccessForGetDisplayName() {
 		$this->connection->expects($this->any())
-			   ->method('__get')
-			   ->willReturnCallback(function ($name) {
-			   	if ($name === 'ldapUserDisplayName') {
-			   		return 'displayname';
-			   	}
-			   	return null;
-			   });
+			->method('__get')
+			->willReturnCallback(function ($name) {
+				if ($name === 'ldapUserDisplayName') {
+					return 'displayname';
+				} elseif ($name === 'ldapUserDisplayName2') {
+					return 'displayname2';
+				}
+				return null;
+			});
 
 		$this->access->expects($this->any())
 			   ->method('readAttribute')
@@ -1214,7 +1216,7 @@ class User_LDAPTest extends TestCase {
 
 
 	public function testSetPasswordInvalid() {
-		$this->expectException(\OC\HintException::class);
+		$this->expectException(\OCP\HintException::class);
 		$this->expectExceptionMessage('Password fails quality checking policy');
 
 		$this->prepareAccessForSetPassword($this->access);
@@ -1310,7 +1312,7 @@ class User_LDAPTest extends TestCase {
 
 	/** @dataProvider avatarDataProvider */
 	public function testCanChangeAvatar($imageData, $expected) {
-		$isValidImage = strpos((string)$imageData, 'valid') === 0;
+		$isValidImage = str_starts_with((string)$imageData, 'valid');
 
 		$user = $this->createMock(User::class);
 		$user->expects($this->once())
@@ -1359,7 +1361,7 @@ class User_LDAPTest extends TestCase {
 
 
 	public function testSetDisplayNameErrorWithPlugin() {
-		$this->expectException(\OC\HintException::class);
+		$this->expectException(\OCP\HintException::class);
 
 		$newDisplayName = 'J. Baker';
 		$this->pluginManager->expects($this->once())

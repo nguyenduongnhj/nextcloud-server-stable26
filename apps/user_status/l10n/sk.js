@@ -7,8 +7,10 @@ OC.L10N.register(
     "Out sick" : "Choroba",
     "Vacationing" : "Na dovolenke",
     "Working remotely" : "Pracuje na diaľku",
+    "In a call" : "práve telefonuje",
     "User status" : "Stav užívateľa",
-    "Clear status message after" : "Vyčistiť správu o stave po",
+    "View profile" : "Zobraziť profil",
+    "Clear status after" : "Vyčistiť správu o stave po",
     "What is your status?" : "Aký je váš stav?",
     "Set status" : "Nastaviť stav",
     "Online status" : "Stav pripojenia",
@@ -32,8 +34,6 @@ OC.L10N.register(
     "1 hour" : "1 hodina",
     "4 hours" : "4 hodiny",
     "Mute all notifications" : "Stíšiť všetky upozornenia",
-    "Appear offline" : "V odpojenom režime",
-    "Clear status after" : "Vyčistiť správu o stave po",
-    "What's your status?" : "Aký je váš stav?"
+    "Appear offline" : "V odpojenom režime"
 },
 "nplurals=4; plural=(n % 1 == 0 && n == 1 ? 0 : n % 1 == 0 && n >= 2 && n <= 4 ? 1 : n % 1 != 0 ? 2: 3);");

@@ -40,6 +40,8 @@
  */
 namespace OCA\Theming;
 
+use OCA\Theming\AppInfo\Application;
+use OCA\Theming\Service\BackgroundService;
 use OCP\App\AppPathNotFoundException;
 use OCP\App\IAppManager;
 use OCP\Files\NotFoundException;
@@ -49,45 +51,31 @@ use OCP\IConfig;
 use OCP\IL10N;
 use OCP\INavigationManager;
 use OCP\IURLGenerator;
+use OCP\IUserSession;
 
 class ThemingDefaults extends \OC_Defaults {
 
-	/** @var IConfig */
-	private $config;
-	/** @var IL10N */
-	private $l;
-	/** @var ImageManager */
-	private $imageManager;
-	/** @var IURLGenerator */
-	private $urlGenerator;
-	/** @var ICacheFactory */
-	private $cacheFactory;
-	/** @var Util */
-	private $util;
-	/** @var IAppManager */
-	private $appManager;
-	/** @var INavigationManager */
-	private $navigationManager;
+	private IConfig $config;
+	private IL10N $l;
+	private ImageManager $imageManager;
+	private IUserSession $userSession;
+	private IURLGenerator $urlGenerator;
+	private ICacheFactory $cacheFactory;
+	private Util $util;
+	private IAppManager $appManager;
+	private INavigationManager $navigationManager;
 
-	/** @var string */
-	private $name;
-	/** @var string */
-	private $title;
-	/** @var string */
-	private $entity;
-	/** @var string */
-	private $productName;
-	/** @var string */
-	private $url;
-	/** @var string */
-	private $color;
+	private string $name;
+	private string $title;
+	private string $entity;
+	private string $productName;
+	private string $url;
+	private string $color;
 
-	/** @var string */
-	private $iTunesAppId;
-	/** @var string */
-	private $iOSClientUrl;
-	/** @var string */
-	private $AndroidClientUrl;
+	private string $iTunesAppId;
+	private string $iOSClientUrl;
+	private string $AndroidClientUrl;
+	private string $FDroidClientUrl;
 
 	/**
 	 * ThemingDefaults constructor.
@@ -95,6 +83,7 @@ class ThemingDefaults extends \OC_Defaults {
 	 * @param IConfig $config
 	 * @param IL10N $l
 	 * @param ImageManager $imageManager
+	 * @param IUserSession $userSession
 	 * @param IURLGenerator $urlGenerator
 	 * @param ICacheFactory $cacheFactory
 	 * @param Util $util
@@ -102,6 +91,7 @@ class ThemingDefaults extends \OC_Defaults {
 	 */
 	public function __construct(IConfig $config,
 								IL10N $l,
+								IUserSession $userSession,
 								IURLGenerator $urlGenerator,
 								ICacheFactory $cacheFactory,
 								Util $util,
@@ -113,6 +103,7 @@ class ThemingDefaults extends \OC_Defaults {
 		$this->config = $config;
 		$this->l = $l;
 		$this->imageManager = $imageManager;
+		$this->userSession = $userSession;
 		$this->urlGenerator = $urlGenerator;
 		$this->cacheFactory = $cacheFactory;
 		$this->util = $util;
@@ -128,6 +119,7 @@ class ThemingDefaults extends \OC_Defaults {
 		$this->iTunesAppId = parent::getiTunesAppId();
 		$this->iOSClientUrl = parent::getiOSClientUrl();
 		$this->AndroidClientUrl = parent::getAndroidClientUrl();
+		$this->FDroidClientUrl = parent::getFDroidClientUrl();
 	}
 
 	public function getName() {
@@ -154,6 +146,11 @@ class ThemingDefaults extends \OC_Defaults {
 		return $this->config->getAppValue('theming', 'url', $this->url);
 	}
 
+	/**
+	 * We pass a string and sanitizeHTML will return a string too in that case
+	 * @psalm-suppress InvalidReturnStatement
+	 * @psalm-suppress InvalidReturnType
+	 */
 	public function getSlogan(?string $lang = null) {
 		return \OCP\Util::sanitizeHTML($this->config->getAppValue('theming', 'slogan', parent::getSlogan($lang)));
 	}
@@ -217,11 +214,40 @@ class ThemingDefaults extends \OC_Defaults {
 
 	/**
 	 * Color that is used for the header as well as for mail headers
-	 *
-	 * @return string
 	 */
-	public function getColorPrimary() {
-		$color = $this->config->getAppValue('theming', 'color', $this->color);
+	public function getColorPrimary(): string {
+		$user = $this->userSession->getUser();
+
+		// admin-defined primary color
+		$defaultColor = $this->getDefaultColorPrimary();
+
+		if ($this->isUserThemingDisabled()) {
+			return $defaultColor;
+		}
+
+		// user-defined primary color
+		if (!empty($user)) {
+			$themingBackgroundColor = $this->config->getUserValue($user->getUID(), Application::APP_ID, 'background_color', '');
+			// If the user selected a specific colour
+			if (preg_match('/^\#([0-9a-f]{3}|[0-9a-f]{6})$/i', $themingBackgroundColor)) {
+				return $themingBackgroundColor;
+			}
+		}
+
+		// If the default color is not valid, return the default background one
+		if (!preg_match('/^\#([0-9a-f]{3}|[0-9a-f]{6})$/i', $defaultColor)) {
+			return BackgroundService::DEFAULT_COLOR;
+		}
+
+		// Finally, return the system global primary color
+		return $defaultColor;
+	}
+
+	/**
+	 * Return the default color primary
+	 */
+	public function getDefaultColorPrimary(): string {
+		$color = $this->config->getAppValue(Application::APP_ID, 'color', '');
 		if (!preg_match('/^\#([0-9a-f]{3}|[0-9a-f]{6})$/i', $color)) {
 			$color = '#0082c9';
 		}
@@ -297,6 +323,12 @@ class ThemingDefaults extends \OC_Defaults {
 		return $this->config->getAppValue('theming', 'AndroidClientUrl', $this->AndroidClientUrl);
 	}
 
+	/**
+	 * @return string
+	 */
+	public function getFDroidClientUrl() {
+		return $this->config->getAppValue('theming', 'FDroidClientUrl', $this->FDroidClientUrl);
+	}
 
 	/**
 	 * @return array scss variables to overwrite
@@ -372,12 +404,12 @@ class ThemingDefaults extends \OC_Defaults {
 			}
 			$route = $this->urlGenerator->linkToRoute('theming.Theming.getManifest', ['app' => $app ]);
 		}
-		if (strpos($image, 'filetypes/') === 0 && file_exists(\OC::$SERVERROOT . '/core/img/' . $image)) {
+		if (str_starts_with($image, 'filetypes/') && file_exists(\OC::$SERVERROOT . '/core/img/' . $image)) {
 			$route = $this->urlGenerator->linkToRoute('theming.Icon.getThemedIcon', ['app' => $app, 'image' => $image]);
 		}
 
 		if ($route) {
-			return $route . '?v=' . $cacheBusterValue;
+			return $route . '?v=' . $this->util->getCacheBuster();
 		}
 
 		return false;
@@ -394,9 +426,9 @@ class ThemingDefaults extends \OC_Defaults {
 	/**
 	 * Increases the cache buster key
 	 */
-	private function increaseCacheBuster() {
-		$cacheBusterKey = $this->config->getAppValue('theming', 'cachebuster', '0');
-		$this->config->setAppValue('theming', 'cachebuster', (int)$cacheBusterKey + 1);
+	public function increaseCacheBuster(): void {
+		$cacheBusterKey = (int)$this->config->getAppValue('theming', 'cachebuster', '0');
+		$this->config->setAppValue('theming', 'cachebuster', (string)($cacheBusterKey + 1));
 		$this->cacheFactory->createDistributed('theming-')->clear();
 		$this->cacheFactory->createDistributed('imagePath')->clear();
 	}
@@ -407,8 +439,16 @@ class ThemingDefaults extends \OC_Defaults {
 	 * @param string $setting
 	 * @param string $value
 	 */
-	public function set($setting, $value) {
+	public function set($setting, $value): void {
 		$this->config->setAppValue('theming', $setting, $value);
+		$this->increaseCacheBuster();
+	}
+
+	/**
+	 * Revert all settings to the default value
+	 */
+	public function undoAll(): void {
+		$this->config->deleteAppValues('theming');
 		$this->increaseCacheBuster();
 	}
 
@@ -418,7 +458,7 @@ class ThemingDefaults extends \OC_Defaults {
 	 * @param string $setting setting which should be reverted
 	 * @return string default value
 	 */
-	public function undo($setting) {
+	public function undo($setting): string {
 		$this->config->deleteAppValue('theming', $setting);
 		$this->increaseCacheBuster();
 
@@ -434,7 +474,7 @@ class ThemingDefaults extends \OC_Defaults {
 				$returnValue = $this->getSlogan();
 				break;
 			case 'color':
-				$returnValue = $this->getColorPrimary();
+				$returnValue = $this->getDefaultColorPrimary();
 				break;
 			case 'logo':
 			case 'logoheader':
@@ -454,5 +494,21 @@ class ThemingDefaults extends \OC_Defaults {
 	 */
 	public function getTextColorPrimary() {
 		return $this->util->invertTextColor($this->getColorPrimary()) ? '#000000' : '#ffffff';
+	}
+
+	/**
+	 * Color of text in the header and primary buttons
+	 *
+	 * @return string
+	 */
+	public function getDefaultTextColorPrimary() {
+		return $this->util->invertTextColor($this->getDefaultColorPrimary()) ? '#000000' : '#ffffff';
+	}
+
+	/**
+	 * Has the admin disabled user customization
+	 */
+	public function isUserThemingDisabled(): bool {
+		return $this->config->getAppValue('theming', 'disable-user-theming', 'no') === 'yes';
 	}
 }

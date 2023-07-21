@@ -4,7 +4,7 @@
  * @author Christoph Wurst <christoph@winzerhof-wurst.at>
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,15 +23,13 @@
 
 import { loadState } from '@nextcloud/initial-state'
 import Vue from 'vue'
-import VueClipboard from 'vue-clipboard2'
 import VTooltip from 'v-tooltip'
 
-import AuthTokenSection from './components/AuthTokenSection'
+import AuthTokenSection from './components/AuthTokenSection.vue'
 
 // eslint-disable-next-line camelcase
 __webpack_nonce__ = btoa(OC.requestToken)
 
-Vue.use(VueClipboard)
 Vue.use(VTooltip, { defaultHtml: false })
 Vue.prototype.t = t
 

@@ -34,6 +34,7 @@
 namespace OCA\DAV\Connector\Sabre;
 
 use OC\AppFramework\Http\Request;
+use OC\Metadata\IMetadataManager;
 use OCP\Constants;
 use OCP\Files\ForbiddenException;
 use OCP\Files\StorageNotAvailableException;
@@ -41,18 +42,19 @@ use OCP\IConfig;
 use OCP\IPreview;
 use OCP\IRequest;
 use OCP\IUserSession;
+use Psr\Log\LoggerInterface;
 use Sabre\DAV\Exception\Forbidden;
 use Sabre\DAV\Exception\NotFound;
 use Sabre\DAV\IFile;
 use Sabre\DAV\PropFind;
 use Sabre\DAV\PropPatch;
 use Sabre\DAV\ServerPlugin;
+use Sabre\DAV\Server;
 use Sabre\DAV\Tree;
 use Sabre\HTTP\RequestInterface;
 use Sabre\HTTP\ResponseInterface;
 
 class FilesPlugin extends ServerPlugin {
-
 	// namespace
 	public const NS_OWNCLOUD = 'http://owncloud.org/ns';
 	public const NS_NEXTCLOUD = 'http://nextcloud.org/ns';
@@ -61,10 +63,13 @@ class FilesPlugin extends ServerPlugin {
 	public const PERMISSIONS_PROPERTYNAME = '{http://owncloud.org/ns}permissions';
 	public const SHARE_PERMISSIONS_PROPERTYNAME = '{http://open-collaboration-services.org/ns}share-permissions';
 	public const OCM_SHARE_PERMISSIONS_PROPERTYNAME = '{http://open-cloud-mesh.org/ns}share-permissions';
+	public const SHARE_ATTRIBUTES_PROPERTYNAME = '{http://nextcloud.org/ns}share-attributes';
 	public const DOWNLOADURL_PROPERTYNAME = '{http://owncloud.org/ns}downloadURL';
 	public const SIZE_PROPERTYNAME = '{http://owncloud.org/ns}size';
 	public const GETETAG_PROPERTYNAME = '{DAV:}getetag';
 	public const LASTMODIFIED_PROPERTYNAME = '{DAV:}lastmodified';
+	public const CREATIONDATE_PROPERTYNAME = '{DAV:}creationdate';
+	public const DISPLAYNAME_PROPERTYNAME = '{DAV:}displayname';
 	public const OWNER_ID_PROPERTYNAME = '{http://owncloud.org/ns}owner-id';
 	public const OWNER_DISPLAY_NAME_PROPERTYNAME = '{http://owncloud.org/ns}owner-display-name';
 	public const CHECKSUMS_PROPERTYNAME = '{http://owncloud.org/ns}checksums';
@@ -76,67 +81,32 @@ class FilesPlugin extends ServerPlugin {
 	public const UPLOAD_TIME_PROPERTYNAME = '{http://nextcloud.org/ns}upload_time';
 	public const CREATION_TIME_PROPERTYNAME = '{http://nextcloud.org/ns}creation_time';
 	public const SHARE_NOTE = '{http://nextcloud.org/ns}note';
+	public const SUBFOLDER_COUNT_PROPERTYNAME = '{http://nextcloud.org/ns}contained-folder-count';
+	public const SUBFILE_COUNT_PROPERTYNAME = '{http://nextcloud.org/ns}contained-file-count';
+	public const FILE_METADATA_SIZE = '{http://nextcloud.org/ns}file-metadata-size';
 
-	/**
-	 * Reference to main server object
-	 *
-	 * @var \Sabre\DAV\Server
-	 */
-	private $server;
-
-	/**
-	 * @var Tree
-	 */
-	private $tree;
-
-	/**
-	 * @var IUserSession
-	 */
-	private $userSession;
+	/** Reference to main server object */
+	private ?Server $server = null;
+	private Tree $tree;
+	private IUserSession $userSession;
 
 	/**
 	 * Whether this is public webdav.
 	 * If true, some returned information will be stripped off.
-	 *
-	 * @var bool
 	 */
-	private $isPublic;
+	private bool $isPublic;
+	private bool $downloadAttachment;
+	private IConfig $config;
+	private IRequest $request;
+	private IPreview $previewManager;
 
-	/**
-	 * @var bool
-	 */
-	private $downloadAttachment;
-
-	/**
-	 * @var IConfig
-	 */
-	private $config;
-
-	/**
-	 * @var IRequest
-	 */
-	private $request;
-
-	/**
-	 * @var IPreview
-	 */
-	private $previewManager;
-
-	/**
-	 * @param Tree $tree
-	 * @param IConfig $config
-	 * @param IRequest $request
-	 * @param IPreview $previewManager
-	 * @param bool $isPublic
-	 * @param bool $downloadAttachment
-	 */
 	public function __construct(Tree $tree,
 								IConfig $config,
 								IRequest $request,
 								IPreview $previewManager,
 								IUserSession $userSession,
-								$isPublic = false,
-								$downloadAttachment = true) {
+								bool $isPublic = false,
+								bool $downloadAttachment = true) {
 		$this->tree = $tree;
 		$this->config = $config;
 		$this->request = $request;
@@ -154,10 +124,9 @@ class FilesPlugin extends ServerPlugin {
 	 *
 	 * This method should set up the required event subscriptions.
 	 *
-	 * @param \Sabre\DAV\Server $server
 	 * @return void
 	 */
-	public function initialize(\Sabre\DAV\Server $server) {
+	public function initialize(Server $server) {
 		$server->xml->namespaceMap[self::NS_OWNCLOUD] = 'oc';
 		$server->xml->namespaceMap[self::NS_NEXTCLOUD] = 'nc';
 		$server->protectedProperties[] = self::FILEID_PROPERTYNAME;
@@ -165,6 +134,7 @@ class FilesPlugin extends ServerPlugin {
 		$server->protectedProperties[] = self::PERMISSIONS_PROPERTYNAME;
 		$server->protectedProperties[] = self::SHARE_PERMISSIONS_PROPERTYNAME;
 		$server->protectedProperties[] = self::OCM_SHARE_PERMISSIONS_PROPERTYNAME;
+		$server->protectedProperties[] = self::SHARE_ATTRIBUTES_PROPERTYNAME;
 		$server->protectedProperties[] = self::SIZE_PROPERTYNAME;
 		$server->protectedProperties[] = self::DOWNLOADURL_PROPERTYNAME;
 		$server->protectedProperties[] = self::OWNER_ID_PROPERTYNAME;
@@ -288,6 +258,7 @@ class FilesPlugin extends ServerPlugin {
 				$response->addHeader('OC-Checksum', $checksum);
 			}
 		}
+		$response->addHeader('X-Accel-Buffering', 'no');
 	}
 
 	/**
@@ -339,7 +310,7 @@ class FilesPlugin extends ServerPlugin {
 				);
 			});
 
-			$propFind->handle(self::OCM_SHARE_PERMISSIONS_PROPERTYNAME, function () use ($node, $httpRequest) {
+			$propFind->handle(self::OCM_SHARE_PERMISSIONS_PROPERTYNAME, function () use ($node, $httpRequest): ?string {
 				$user = $this->userSession->getUser();
 				if ($user === null) {
 					return null;
@@ -348,14 +319,18 @@ class FilesPlugin extends ServerPlugin {
 					$user->getUID()
 				);
 				$ocmPermissions = $this->ncPermissions2ocmPermissions($ncPermissions);
-				return json_encode($ocmPermissions);
+				return json_encode($ocmPermissions, JSON_THROW_ON_ERROR);
 			});
 
-			$propFind->handle(self::GETETAG_PROPERTYNAME, function () use ($node) {
+			$propFind->handle(self::SHARE_ATTRIBUTES_PROPERTYNAME, function () use ($node, $httpRequest) {
+				return json_encode($node->getShareAttributes(), JSON_THROW_ON_ERROR);
+			});
+
+			$propFind->handle(self::GETETAG_PROPERTYNAME, function () use ($node): string {
 				return $node->getETag();
 			});
 
-			$propFind->handle(self::OWNER_ID_PROPERTYNAME, function () use ($node) {
+			$propFind->handle(self::OWNER_ID_PROPERTYNAME, function () use ($node): ?string {
 				$owner = $node->getOwner();
 				if (!$owner) {
 					return null;
@@ -363,7 +338,7 @@ class FilesPlugin extends ServerPlugin {
 					return $owner->getUID();
 				}
 			});
-			$propFind->handle(self::OWNER_DISPLAY_NAME_PROPERTYNAME, function () use ($node) {
+			$propFind->handle(self::OWNER_DISPLAY_NAME_PROPERTYNAME, function () use ($node): ?string {
 				$owner = $node->getOwner();
 				if (!$owner) {
 					return null;
@@ -373,16 +348,16 @@ class FilesPlugin extends ServerPlugin {
 			});
 
 			$propFind->handle(self::HAS_PREVIEW_PROPERTYNAME, function () use ($node) {
-				return json_encode($this->previewManager->isAvailable($node->getFileInfo()));
+				return json_encode($this->previewManager->isAvailable($node->getFileInfo()), JSON_THROW_ON_ERROR);
 			});
-			$propFind->handle(self::SIZE_PROPERTYNAME, function () use ($node) {
+			$propFind->handle(self::SIZE_PROPERTYNAME, function () use ($node): int|float {
 				return $node->getSize();
 			});
 			$propFind->handle(self::MOUNT_TYPE_PROPERTYNAME, function () use ($node) {
 				return $node->getFileInfo()->getMountPoint()->getMountType();
 			});
 
-			$propFind->handle(self::SHARE_NOTE, function () use ($node, $httpRequest) {
+			$propFind->handle(self::SHARE_NOTE, function () use ($node, $httpRequest): ?string {
 				$user = $this->userSession->getUser();
 				if ($user === null) {
 					return null;
@@ -391,11 +366,26 @@ class FilesPlugin extends ServerPlugin {
 					$user->getUID()
 				);
 			});
-		}
 
-		if ($node instanceof \OCA\DAV\Connector\Sabre\Node) {
 			$propFind->handle(self::DATA_FINGERPRINT_PROPERTYNAME, function () use ($node) {
 				return $this->config->getSystemValue('data-fingerprint', '');
+			});
+			$propFind->handle(self::CREATIONDATE_PROPERTYNAME, function () use ($node) {
+				return (new \DateTimeImmutable())
+					->setTimestamp($node->getFileInfo()->getCreationTime())
+					->format(\DateTimeInterface::ATOM);
+			});
+			$propFind->handle(self::CREATION_TIME_PROPERTYNAME, function () use ($node) {
+				return $node->getFileInfo()->getCreationTime();
+			});
+			/**
+			 * Return file/folder name as displayname. The primary reason to
+			 * implement it this way is to avoid costly fallback to
+			 * CustomPropertiesBackend (esp. visible when querying all files
+			 * in a folder).
+			 */
+			$propFind->handle(self::DISPLAYNAME_PROPERTYNAME, function () use ($node) {
+				return $node->getName();
 			});
 		}
 
@@ -423,16 +413,35 @@ class FilesPlugin extends ServerPlugin {
 				return new ChecksumList($checksum);
 			});
 
-			$propFind->handle(self::CREATION_TIME_PROPERTYNAME, function () use ($node) {
-				return $node->getFileInfo()->getCreationTime();
-			});
-
 			$propFind->handle(self::UPLOAD_TIME_PROPERTYNAME, function () use ($node) {
 				return $node->getFileInfo()->getUploadTime();
 			});
+
+			if ($this->config->getSystemValueBool('enable_file_metadata', true)) {
+				$propFind->handle(self::FILE_METADATA_SIZE, function () use ($node) {
+					if (!str_starts_with($node->getFileInfo()->getMimetype(), 'image')) {
+						return json_encode((object)[], JSON_THROW_ON_ERROR);
+					}
+
+					if ($node->hasMetadata('size')) {
+						$sizeMetadata = $node->getMetadata('size');
+					} else {
+						// This code path should not be called since we try to preload
+						// the metadata when loading the folder or the search results
+						// in one go
+						$metadataManager = \OC::$server->get(IMetadataManager::class);
+						$sizeMetadata = $metadataManager->fetchMetadataFor('size', [$node->getId()])[$node->getId()];
+
+						// TODO would be nice to display this in the profiler...
+						\OC::$server->get(LoggerInterface::class)->debug('Inefficient fetching of metadata');
+					}
+
+					return $sizeMetadata->getValue();
+				});
+			}
 		}
 
-		if ($node instanceof \OCA\DAV\Connector\Sabre\Directory) {
+		if ($node instanceof Directory) {
 			$propFind->handle(self::SIZE_PROPERTYNAME, function () use ($node) {
 				return $node->getSize();
 			});
@@ -440,6 +449,49 @@ class FilesPlugin extends ServerPlugin {
 			$propFind->handle(self::IS_ENCRYPTED_PROPERTYNAME, function () use ($node) {
 				return $node->getFileInfo()->isEncrypted() ? '1' : '0';
 			});
+
+			$requestProperties = $propFind->getRequestedProperties();
+
+			// TODO detect dynamically which metadata groups are requested and
+			// preload all of them and not just size
+			if ($this->config->getSystemValueBool('enable_file_metadata', true)
+				&& in_array(self::FILE_METADATA_SIZE, $requestProperties, true)) {
+				// Preloading of the metadata
+				$fileIds = [];
+				foreach ($node->getChildren() as $child) {
+					/** @var \OCP\Files\Node|Node $child */
+					if (str_starts_with($child->getFileInfo()->getMimeType(), 'image/')) {
+						/** @var File $child */
+						$fileIds[] = $child->getFileInfo()->getId();
+					}
+				}
+				/** @var IMetaDataManager $metadataManager */
+				$metadataManager = \OC::$server->get(IMetadataManager::class);
+				$preloadedMetadata = $metadataManager->fetchMetadataFor('size', $fileIds);
+				foreach ($node->getChildren() as $child) {
+					/** @var \OCP\Files\Node|Node $child */
+					if (str_starts_with($child->getFileInfo()->getMimeType(), 'image')) {
+						/** @var File $child */
+						$child->setMetadata('size', $preloadedMetadata[$child->getFileInfo()->getId()]);
+					}
+				}
+			}
+
+			if (in_array(self::SUBFILE_COUNT_PROPERTYNAME, $requestProperties, true)
+				|| in_array(self::SUBFOLDER_COUNT_PROPERTYNAME, $requestProperties, true)) {
+				$nbFiles = 0;
+				$nbFolders = 0;
+				foreach ($node->getChildren() as $child) {
+					if ($child instanceof File) {
+						$nbFiles++;
+					} elseif ($child instanceof Directory) {
+						$nbFolders++;
+					}
+				}
+
+				$propFind->handle(self::SUBFILE_COUNT_PROPERTYNAME, $nbFiles);
+				$propFind->handle(self::SUBFOLDER_COUNT_PROPERTYNAME, $nbFolders);
+			}
 		}
 	}
 
@@ -493,10 +545,15 @@ class FilesPlugin extends ServerPlugin {
 			if (empty($etag)) {
 				return false;
 			}
-			if ($node->setEtag($etag) !== -1) {
-				return true;
+			return $node->setEtag($etag) !== -1;
+		});
+		$propPatch->handle(self::CREATIONDATE_PROPERTYNAME, function ($time) use ($node) {
+			if (empty($time)) {
+				return false;
 			}
-			return false;
+			$dateTime = new \DateTimeImmutable($time);
+			$node->setCreationTime($dateTime->getTimestamp());
+			return true;
 		});
 		$propPatch->handle(self::CREATION_TIME_PROPERTYNAME, function ($time) use ($node) {
 			if (empty($time)) {
@@ -504,6 +561,13 @@ class FilesPlugin extends ServerPlugin {
 			}
 			$node->setCreationTime((int) $time);
 			return true;
+		});
+		/**
+		 * Disable modification of the displayname property for files and
+		 * folders via PROPPATCH. See PROPFIND for more information.
+		 */
+		$propPatch->handle(self::DISPLAYNAME_PROPERTYNAME, function ($displayName) {
+			return 403;
 		});
 	}
 

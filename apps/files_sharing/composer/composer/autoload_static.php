@@ -50,8 +50,11 @@ class ComposerStaticInitFiles_Sharing
         'OCA\\Files_Sharing\\Controller\\ShareController' => __DIR__ . '/..' . '/../lib/Controller/ShareController.php',
         'OCA\\Files_Sharing\\Controller\\ShareInfoController' => __DIR__ . '/..' . '/../lib/Controller/ShareInfoController.php',
         'OCA\\Files_Sharing\\Controller\\ShareesAPIController' => __DIR__ . '/..' . '/../lib/Controller/ShareesAPIController.php',
+        'OCA\\Files_Sharing\\DefaultPublicShareTemplateProvider' => __DIR__ . '/..' . '/../lib/DefaultPublicShareTemplateProvider.php',
         'OCA\\Files_Sharing\\DeleteOrphanedSharesJob' => __DIR__ . '/..' . '/../lib/DeleteOrphanedSharesJob.php',
         'OCA\\Files_Sharing\\Event\\BeforeTemplateRenderedEvent' => __DIR__ . '/..' . '/../lib/Event/BeforeTemplateRenderedEvent.php',
+        'OCA\\Files_Sharing\\Event\\ShareLinkAccessedEvent' => __DIR__ . '/..' . '/../lib/Event/ShareLinkAccessedEvent.php',
+        'OCA\\Files_Sharing\\Event\\ShareMountedEvent' => __DIR__ . '/..' . '/../lib/Event/ShareMountedEvent.php',
         'OCA\\Files_Sharing\\Exceptions\\BrokenPath' => __DIR__ . '/..' . '/../lib/Exceptions/BrokenPath.php',
         'OCA\\Files_Sharing\\Exceptions\\S2SException' => __DIR__ . '/..' . '/../lib/Exceptions/S2SException.php',
         'OCA\\Files_Sharing\\Exceptions\\SharingRightsException' => __DIR__ . '/..' . '/../lib/Exceptions/SharingRightsException.php',
@@ -81,6 +84,8 @@ class ComposerStaticInitFiles_Sharing
         'OCA\\Files_Sharing\\Migration\\Version11300Date20201120141438' => __DIR__ . '/..' . '/../lib/Migration/Version11300Date20201120141438.php',
         'OCA\\Files_Sharing\\Migration\\Version21000Date20201223143245' => __DIR__ . '/..' . '/../lib/Migration/Version21000Date20201223143245.php',
         'OCA\\Files_Sharing\\Migration\\Version22000Date20210216084241' => __DIR__ . '/..' . '/../lib/Migration/Version22000Date20210216084241.php',
+        'OCA\\Files_Sharing\\Migration\\Version24000Date20220208195521' => __DIR__ . '/..' . '/../lib/Migration/Version24000Date20220208195521.php',
+        'OCA\\Files_Sharing\\Migration\\Version24000Date20220404142216' => __DIR__ . '/..' . '/../lib/Migration/Version24000Date20220404142216.php',
         'OCA\\Files_Sharing\\MountProvider' => __DIR__ . '/..' . '/../lib/MountProvider.php',
         'OCA\\Files_Sharing\\Notification\\Listener' => __DIR__ . '/..' . '/../lib/Notification/Listener.php',
         'OCA\\Files_Sharing\\Notification\\Notifier' => __DIR__ . '/..' . '/../lib/Notification/Notifier.php',
@@ -91,6 +96,7 @@ class ComposerStaticInitFiles_Sharing
         'OCA\\Files_Sharing\\SharedMount' => __DIR__ . '/..' . '/../lib/SharedMount.php',
         'OCA\\Files_Sharing\\SharedStorage' => __DIR__ . '/..' . '/../lib/SharedStorage.php',
         'OCA\\Files_Sharing\\Updater' => __DIR__ . '/..' . '/../lib/Updater.php',
+        'OCA\\Files_Sharing\\ViewOnly' => __DIR__ . '/..' . '/../lib/ViewOnly.php',
     );
 
     public static function getInitializer(ClassLoader $loader)

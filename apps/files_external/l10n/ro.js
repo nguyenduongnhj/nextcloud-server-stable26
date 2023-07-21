@@ -9,7 +9,6 @@ OC.L10N.register(
     "Error configuring OAuth2" : "Eroare la configurarea OAuth2",
     "Generate keys" : "Generează chei",
     "Error generating key pair" : "Eroarea la generarea cheilor",
-    "All users. Type to select user or group." : "Toți utilizatorii. Începe să scrii pentru a selecta un utilizator sau un grup.",
     "Enable encryption" : "Activează criptarea",
     "Enable previews" : "Activează previzualizările",
     "Enable sharing" : "Activează partajarea",
@@ -17,7 +16,7 @@ OC.L10N.register(
     "Never" : "Niciodată",
     "Once every direct access" : "O dată la fiecare acces direct",
     "Read only" : "Doar citire",
-    "Delete" : "Șterge",
+    "Disconnect" : "Deconectare",
     "Admin defined" : "Administrator definit",
     "Saved" : "Salvat",
     "Saving …" : "Se salvează",
@@ -77,9 +76,6 @@ OC.L10N.register(
     "Configuration" : "Configurație",
     "Available for" : "Disponibil pentru",
     "Add storage" : "Adauga stocare",
-    "Advanced settings" : "Setări avansate",
-    "(group)" : "(grup)",
-    "SMB / CIFS" : "SMB / CIFS",
-    "SMB / CIFS using OC login" : "SMB / CIFS folosind autentificare OC"
+    "Advanced settings" : "Setări avansate"
 },
 "nplurals=3; plural=(n==1?0:(((n%100>19)||((n%100==0)&&(n!=0)))?2:1));");

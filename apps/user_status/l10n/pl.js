@@ -9,7 +9,8 @@ OC.L10N.register(
     "Working remotely" : "Praca zdalna",
     "In a call" : "Rozmawia",
     "User status" : "Status użytkownika",
-    "Clear status message after" : "Wyczyść komunikat statusu po",
+    "View profile" : "Zobacz profil",
+    "Clear status after" : "Wyczyść status po",
     "What is your status?" : "Jaki jest Twój status?",
     "Set status" : "Ustaw status",
     "Online status" : "Status online",
@@ -33,8 +34,6 @@ OC.L10N.register(
     "1 hour" : "1 godzina",
     "4 hours" : "4 godziny",
     "Mute all notifications" : "Wycisz wszystkie powiadomienia",
-    "Appear offline" : "Widnieje jako offline",
-    "Clear status after" : "Wyczyść status po",
-    "What's your status?" : "Jaki jest Twój status?"
+    "Appear offline" : "Widnieje jako offline"
 },
 "nplurals=4; plural=(n==1 ? 0 : (n%10>=2 && n%10<=4) && (n%100<12 || n%100>14) ? 1 : n!=1 && (n%10>=0 && n%10<=1) || (n%10>=5 && n%10<=9) || (n%100>=12 && n%100<=14) ? 2 : 3);");

@@ -3,7 +3,7 @@
  *
  * @author Julius Härtl <jus@bitgrid.net>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,10 +20,10 @@
  *
  */
 
-import RequestUserAgent from './RequestUserAgent'
-import RequestTime from './RequestTime'
-import RequestURL from './RequestURL'
-import RequestUserGroup from './RequestUserGroup'
+import RequestUserAgent from './RequestUserAgent.vue'
+import RequestTime from './RequestTime.vue'
+import RequestURL from './RequestURL.vue'
+import RequestUserGroup from './RequestUserGroup.vue'
 
 const RequestChecks = [
 	{

@@ -31,7 +31,6 @@ namespace OCA\User_LDAP\Tests\User;
 use OCA\User_LDAP\Access;
 use OCA\User_LDAP\Connection;
 use OCA\User_LDAP\FilesystemHelper;
-use OCA\User_LDAP\LogWrapper;
 use OCA\User_LDAP\User\User;
 use OCP\IAvatar;
 use OCP\IAvatarManager;
@@ -41,6 +40,7 @@ use OCP\IUser;
 use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
 use OCP\Notification\INotification;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class UserTest
@@ -66,8 +66,8 @@ class UserTest extends \Test\TestCase {
 	protected $image;
 	/** @var IAvatarManager|\PHPUnit\Framework\MockObject\MockObject */
 	protected $avatarManager;
-	/** @var LogWrapper|\PHPUnit\Framework\MockObject\MockObject */
-	protected $log;
+	/** @var LoggerInterface|\PHPUnit\Framework\MockObject\MockObject */
+	protected $logger;
 	/** @var string */
 	protected $uid = 'alice';
 	/** @var string */
@@ -88,7 +88,7 @@ class UserTest extends \Test\TestCase {
 
 		$this->config = $this->createMock(IConfig::class);
 		$this->filesystemhelper = $this->createMock(FilesystemHelper::class);
-		$this->log = $this->createMock(LogWrapper::class);
+		$this->logger = $this->createMock(LoggerInterface::class);
 		$this->avatarManager = $this->createMock(IAvatarManager::class);
 		$this->image = $this->createMock(Image::class);
 		$this->userManager = $this->createMock(IUserManager::class);
@@ -101,7 +101,7 @@ class UserTest extends \Test\TestCase {
 			$this->config,
 			$this->filesystemhelper,
 			$this->image,
-			$this->log,
+			$this->logger,
 			$this->avatarManager,
 			$this->userManager,
 			$this->notificationManager
@@ -254,16 +254,12 @@ class UserTest extends \Test\TestCase {
 	}
 
 	public function testUpdateQuotaDefaultProvided() {
-		$this->connection->expects($this->at(0))
-			->method('__get')
-			->with($this->equalTo('ldapQuotaAttribute'))
-			->willReturn('myquota');
-		$this->connection->expects($this->at(1))
-			->method('__get')
-			->with($this->equalTo('ldapQuotaDefault'))
-			->willReturn('25 GB');
 		$this->connection->expects($this->exactly(2))
-			->method('__get');
+			->method('__get')
+			->willReturnMap([
+				['ldapQuotaAttribute', 'myquota'],
+				['ldapQuotaDefault', '25 GB'],
+			]);
 
 		$this->access->expects($this->once())
 			->method('readAttribute')
@@ -497,7 +493,7 @@ class UserTest extends \Test\TestCase {
 		$this->user->updateQuota();
 	}
 
-	//the testUpdateAvatar series also implicitely tests getAvatarImage
+	//the testUpdateAvatar series also implicitly tests getAvatarImage
 	public function XtestUpdateAvatarJpegPhotoProvided() {
 		$this->access->expects($this->once())
 			->method('readAttribute')
@@ -935,7 +931,7 @@ class UserTest extends \Test\TestCase {
 				$this->config,
 				$this->filesystemhelper,
 				$this->image,
-				$this->log,
+				$this->logger,
 				$this->avatarManager,
 				$this->userManager,
 				$this->notificationManager
@@ -1016,6 +1012,10 @@ class UserTest extends \Test\TestCase {
 			->method('readAttribute')
 			->willReturn(false);
 
+		$this->access->expects($this->once())
+			->method('username2dn')
+			->willReturn($this->dn);
+
 		// asks for "enforce_home_folder_naming_rule"
 		$this->config->expects($this->once())
 			->method('getAppValue')
@@ -1037,6 +1037,10 @@ class UserTest extends \Test\TestCase {
 		$this->access->expects($this->once())
 			->method('readAttribute')
 			->willReturn(false);
+
+		$this->access->expects($this->once())
+			->method('username2dn')
+			->willReturn($this->dn);
 
 		// asks for "enforce_home_folder_naming_rule"
 		$this->config->expects($this->once())

@@ -22,9 +22,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>
  *
  */
+
 namespace OCA\Files_Sharing;
 
-use OC\Files\ObjectStore\NoopScanner;
+use OC\Files\ObjectStore\ObjectStoreScanner;
 
 /**
  * Scanner for SharedStorage
@@ -71,7 +72,8 @@ class Scanner extends \OC\Files\Cache\Scanner {
 
 	public function scanFile($file, $reuseExisting = 0, $parentId = -1, $cacheData = null, $lock = true, $data = null) {
 		$sourceScanner = $this->getSourceScanner();
-		if ($sourceScanner instanceof NoopScanner) {
+		if ($sourceScanner instanceof ObjectStoreScanner) {
+			// ObjectStoreScanner doesn't scan
 			return [];
 		} else {
 			return parent::scanFile($file, $reuseExisting, $parentId, $cacheData, $lock);

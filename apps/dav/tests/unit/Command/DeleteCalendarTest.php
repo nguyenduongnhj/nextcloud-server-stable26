@@ -25,12 +25,13 @@ declare(strict_types=1);
 namespace OCA\DAV\Tests\Command;
 
 use OCA\DAV\CalDAV\BirthdayService;
-use OCA\DAV\CalDav\CalDavBackend;
+use OCA\DAV\CalDAV\CalDavBackend;
 use OCA\DAV\Command\DeleteCalendar;
 use OCP\IConfig;
 use OCP\IL10N;
 use OCP\IUserManager;
 use PHPUnit\Framework\MockObject\MockObject;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 use Test\TestCase;
 
@@ -57,6 +58,9 @@ class DeleteCalendarTest extends TestCase {
 
 	/** @var DeleteCalendar */
 	private $command;
+	
+	/** @var MockObject|LoggerInterface */
+	private $logger;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -65,16 +69,18 @@ class DeleteCalendarTest extends TestCase {
 		$this->config = $this->createMock(IConfig::class);
 		$this->l10n = $this->createMock(IL10N::class);
 		$this->userManager = $this->createMock(IUserManager::class);
+		$this->logger = $this->createMock(LoggerInterface::class);
 
 		$this->command = new DeleteCalendar(
 			$this->calDav,
 			$this->config,
 			$this->l10n,
 			$this->userManager,
+			$this->logger
 		);
 	}
 
-	public function testInvalidUser() {
+	public function testInvalidUser(): void {
 		$this->expectException(\InvalidArgumentException::class);
 		$this->expectExceptionMessage(
 			'User <' . self::USER . '> is unknown.');
@@ -91,7 +97,7 @@ class DeleteCalendarTest extends TestCase {
 		]);
 	}
 
-	public function testNoCalendarName() {
+	public function testNoCalendarName(): void {
 		$this->expectException(\InvalidArgumentException::class);
 		$this->expectExceptionMessage(
 			'Please specify a calendar name or --birthday');
@@ -107,7 +113,7 @@ class DeleteCalendarTest extends TestCase {
 		]);
 	}
 
-	public function testInvalidCalendar() {
+	public function testInvalidCalendar(): void {
 		$this->expectException(\InvalidArgumentException::class);
 		$this->expectExceptionMessage(
 			'User <' . self::USER . '> has no calendar named <' . self::NAME .  '>.');
@@ -131,7 +137,7 @@ class DeleteCalendarTest extends TestCase {
 		]);
 	}
 
-	public function testDelete() {
+	public function testDelete(): void {
 		$id = 1234;
 		$calendar = [
 			'id' => $id,
@@ -161,7 +167,7 @@ class DeleteCalendarTest extends TestCase {
 		]);
 	}
 
-	public function testForceDelete() {
+	public function testForceDelete(): void {
 		$id = 1234;
 		$calendar = [
 			'id' => $id,
@@ -192,7 +198,7 @@ class DeleteCalendarTest extends TestCase {
 		]);
 	}
 
-	public function testDeleteBirthday() {
+	public function testDeleteBirthday(): void {
 		$id = 1234;
 		$calendar = [
 			'id' => $id,
@@ -222,7 +228,7 @@ class DeleteCalendarTest extends TestCase {
 		]);
 	}
 
-	public function testBirthdayHasPrecedence() {
+	public function testBirthdayHasPrecedence(): void {
 		$calendar = [
 			'id' => 1234,
 			'principaluri' => 'principals/users/' . self::USER,

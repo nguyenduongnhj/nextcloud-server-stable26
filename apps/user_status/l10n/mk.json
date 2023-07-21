@@ -5,8 +5,11 @@
     "Out sick" : "На боледување",
     "Vacationing" : "На одмор",
     "Working remotely" : "Присутен од дома",
+    "In a call" : "Во разговор",
     "User status" : "Статус на корисникот",
-    "Clear status message after" : "Тргни го статусот после",
+    "View profile" : "Прегледај профил",
+    "Clear status after" : "Тргни го статусот после",
+    "What is your status?" : "Кој е вашиот статус?",
     "Set status" : "Постави статус",
     "Online status" : "Присутен",
     "Status message" : "Статус порака",
@@ -29,8 +32,6 @@
     "1 hour" : "1 час",
     "4 hours" : "4 часа",
     "Mute all notifications" : "Занеми (Mute) ги сите известувања",
-    "Appear offline" : "Прикажи исклучен",
-    "Clear status after" : "Тргни го статусот после",
-    "What's your status?" : "Кој е вашиот статус?"
+    "Appear offline" : "Прикажи исклучен"
 },"pluralForm" :"nplurals=2; plural=(n % 10 == 1 && n % 100 != 11) ? 0 : 1;"
 }

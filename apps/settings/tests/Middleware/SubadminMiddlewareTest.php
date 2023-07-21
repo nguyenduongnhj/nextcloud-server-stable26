@@ -68,10 +68,12 @@ class SubadminMiddlewareTest extends \Test\TestCase {
 		$this->expectException(\OC\AppFramework\Middleware\Security\Exceptions\NotAdminException::class);
 
 		$this->reflector
-			->expects($this->once())
+			->expects($this->exactly(2))
 			->method('hasAnnotation')
-			->with('NoSubAdminRequired')
-			->willReturn(false);
+			->withConsecutive(
+				['NoSubAdminRequired'],
+				['AuthorizedAdminSetting'],
+			)->willReturn(false);
 		$this->subadminMiddleware->beforeController($this->controller, 'foo');
 	}
 
@@ -87,10 +89,12 @@ class SubadminMiddlewareTest extends \Test\TestCase {
 
 	public function testBeforeControllerAsSubAdminWithoutExemption() {
 		$this->reflector
-			->expects($this->once())
+			->expects($this->exactly(2))
 			->method('hasAnnotation')
-			->with('NoSubAdminRequired')
-			->willReturn(false);
+			->withConsecutive(
+				['NoSubAdminRequired'],
+				['AuthorizedAdminSetting'],
+			)->willReturn(false);
 		$this->subadminMiddlewareAsSubAdmin->beforeController($this->controller, 'foo');
 	}
 

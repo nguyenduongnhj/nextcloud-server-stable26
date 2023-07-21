@@ -21,8 +21,12 @@
   -->
 
 <template>
-	<div id="app-content" class="user-list-grid" @scroll.passive="onScroll">
-		<Modal v-if="showConfig.showNewUserForm" @close="closeModal">
+	<div id="app-content"
+		role="grid"
+		:aria-label="t('settings', 'User\'s table')"
+		class="user-list-grid"
+		@scroll.passive="onScroll">
+		<NcModal v-if="showConfig.showNewUserForm" size="small" @close="closeModal">
 			<form id="new-user"
 				:disabled="loading.all"
 				class="modal__content"
@@ -56,6 +60,7 @@
 					ref="newuserpassword"
 					v-model="newUser.password"
 					:minlength="minPasswordLength"
+					:maxlength="469"
 					:placeholder="t('settings', 'Password')"
 					:required="newUser.mailAddress===''"
 					autocapitalize="none"
@@ -83,7 +88,7 @@
 						:value="newUser.groups"
 						tabindex="-1"
 						type="text">
-					<Multiselect v-model="newUser.groups"
+					<NcMultiselect v-model="newUser.groups"
 						:close-on-select="false"
 						:disabled="loading.groups||loading.all"
 						:multiple="true"
@@ -100,11 +105,11 @@
 							Subadmins can't create users outside their groups
 							Therefore, empty select is forbidden -->
 						<span slot="noResult">{{ t('settings', 'No results') }}</span>
-					</Multiselect>
+					</NcMultiselect>
 				</div>
 				<div v-if="subAdminsGroups.length>0 && settings.isAdmin"
 					class="subadmins modal__item">
-					<Multiselect v-model="newUser.subAdminsGroups"
+					<NcMultiselect v-model="newUser.subAdminsGroups"
 						:close-on-select="false"
 						:multiple="true"
 						:options="subAdminsGroups"
@@ -114,10 +119,10 @@
 						label="name"
 						track-by="id">
 						<span slot="noResult">{{ t('settings', 'No results') }}</span>
-					</Multiselect>
+					</NcMultiselect>
 				</div>
 				<div class="quota modal__item">
-					<Multiselect v-model="newUser.quota"
+					<NcMultiselect v-model="newUser.quota"
 						:allow-empty="false"
 						:options="quotaOptions"
 						:placeholder="t('settings', 'Select user quota')"
@@ -128,7 +133,7 @@
 						@tag="validateQuota" />
 				</div>
 				<div v-if="showConfig.showLanguages" class="languages modal__item">
-					<Multiselect v-model="newUser.language"
+					<NcMultiselect v-model="newUser.language"
 						:allow-empty="false"
 						:options="languages"
 						:placeholder="t('settings', 'Default language')"
@@ -141,26 +146,41 @@
 				<div v-if="showConfig.showStoragePath" class="storageLocation" />
 				<div v-if="showConfig.showUserBackend" class="userBackend" />
 				<div v-if="showConfig.showLastLogin" class="lastLogin" />
+				<div :class="{'icon-loading-small': loading.manager}" class="modal__item managers">
+					<NcMultiselect ref="manager"
+						v-model="newUser.manager"
+						:close-on-select="true"
+						:user-select="true"
+						:options="possibleManagers"
+						:placeholder="t('settings', 'Select user manager')"
+						class="multiselect-vue"
+						label="displayname"
+						track-by="id"
+						@search-change="searchUserManager">
+						<span slot="noResult">{{ t('settings', 'No results') }}</span>
+					</NcMultiselect>
+				</div>
 				<div class="user-actions">
-					<button id="newsubmit"
-						class="button primary"
-						type="submit"
+					<NcButton id="newsubmit"
+						type="primary"
+						native-type="submit"
 						value="">
 						{{ t('settings', 'Add a new user') }}
-					</button>
+					</NcButton>
 				</div>
 			</form>
-		</Modal>
+		</NcModal>
 		<div id="grid-header"
 			:class="{'sticky': scrolled && !showConfig.showNewUserForm}"
 			class="row">
 			<div id="headerAvatar" class="avatar" />
 			<div id="headerName" class="name">
-				{{ t('settings', 'Username') }}
-
 				<div class="subtitle">
-					{{ t('settings', 'Display name') }}
+					<strong>
+						{{ t('settings', 'Display name') }}
+					</strong>
 				</div>
+				{{ t('settings', 'Username') }}
 			</div>
 			<div id="headerPassword" class="password">
 				{{ t('settings', 'Password') }}
@@ -199,7 +219,9 @@
 				class="headerLastLogin lastLogin">
 				{{ t('settings', 'Last login') }}
 			</div>
-
+			<div id="headerManager" class="manager">
+				{{ t('settings', 'Manager') }}
+			</div>
 			<div class="userActions" />
 		</div>
 
@@ -212,7 +234,10 @@
 			:settings="settings"
 			:show-config="showConfig"
 			:sub-admins-groups="subAdminsGroups"
-			:user="user" />
+			:user="user"
+			:users="users"
+			:is-dark-theme="isDarkTheme" />
+
 		<InfiniteLoading ref="infiniteLoading" @infinite="infiniteHandler">
 			<div slot="spinner">
 				<div class="users-icon-loading icon-loading" />
@@ -234,11 +259,11 @@
 import { subscribe, unsubscribe } from '@nextcloud/event-bus'
 import InfiniteLoading from 'vue-infinite-loading'
 import Vue from 'vue'
-import { Modal } from '@nextcloud/vue'
+import NcModal from '@nextcloud/vue/dist/Components/NcModal.js'
+import NcButton from '@nextcloud/vue/dist/Components/NcButton.js'
+import NcMultiselect from '@nextcloud/vue/dist/Components/NcMultiselect.js'
 
-import Multiselect from '@nextcloud/vue/dist/Components/Multiselect'
-
-import userRow from './UserList/UserRow'
+import userRow from './UserList/UserRow.vue'
 
 const unlimitedQuota = {
 	id: 'none',
@@ -254,6 +279,7 @@ const newUser = {
 	password: '',
 	mailAddress: '',
 	groups: [],
+	manager: '',
 	subAdminsGroups: [],
 	quota: defaultQuota,
 	language: {
@@ -265,10 +291,11 @@ const newUser = {
 export default {
 	name: 'UserList',
 	components: {
-		Modal,
+		NcModal,
 		userRow,
-		Multiselect,
+		NcMultiselect,
 		InfiniteLoading,
+		NcButton,
 	},
 	props: {
 		users: {
@@ -297,6 +324,7 @@ export default {
 				groups: false,
 			},
 			scrolled: false,
+			possibleManagers: [],
 			searchQuery: '',
 			newUser: Object.assign({}, newUser),
 		}
@@ -369,13 +397,17 @@ export default {
 			return [
 				{
 					label: t('settings', 'Common languages'),
-					languages: this.settings.languages.commonlanguages,
+					languages: this.settings.languages.commonLanguages,
 				},
 				{
-					label: t('settings', 'All languages'),
-					languages: this.settings.languages.languages,
+					label: t('settings', 'Other languages'),
+					languages: this.settings.languages.otherLanguages,
 				},
 			]
+		},
+		isDarkTheme() {
+			return window.getComputedStyle(this.$el)
+				.getPropertyValue('--background-invert-if-dark') === 'invert(100%)'
 		},
 	},
 	watch: {
@@ -401,6 +433,10 @@ export default {
 				this.$refs.infiniteLoading.stateChanger.loaded()
 			}
 		},
+	},
+
+	async beforeMount() {
+		await this.searchUserManager()
 	},
 
 	mounted() {
@@ -430,6 +466,14 @@ export default {
 	},
 
 	methods: {
+		async searchUserManager(query) {
+			await this.$store.dispatch('searchUsers', { offset: 0, limit: 10, search: query }).then(response => {
+				const users = response?.data ? Object.values(response?.data.ocs.data.users) : []
+				if (users.length > 0) {
+					this.possibleManagers = users
+				}
+			})
+		},
 		onScroll(event) {
 			this.scrolled = event.target.scrollTo > 0
 		},
@@ -438,7 +482,7 @@ export default {
 		 * Validate quota string to make sure it's a valid human file size
 		 *
 		 * @param {string} quota Quota in readable format '5 GB'
-		 * @returns {Object}
+		 * @return {object}
 		 */
 		validateQuota(quota) {
 			// only used for new presets sent through @Tag
@@ -513,6 +557,7 @@ export default {
 				subadmin: this.newUser.subAdminsGroups.map(group => group.id),
 				quota: this.newUser.quota.id,
 				language: this.newUser.language.code,
+				manager: this.newUser.manager.id,
 			})
 				.then(() => {
 					this.resetForm()
@@ -550,7 +595,7 @@ export default {
 		 * Create a new group
 		 *
 		 * @param {string} gid Group id
-		 * @returns {Promise}
+		 * @return {Promise}
 		 */
 		createGroup(gid) {
 			this.loading.groups = true
@@ -568,8 +613,8 @@ export default {
 		/**
 		 * If the selected group is the disabled group but the count is 0
 		 * redirect to the all users page.
-		 * * we only check for 0 because we don't have the count on ldap
-		 * * and we therefore set the usercount to -1 in this specific case
+		 * we only check for 0 because we don't have the count on ldap
+		 * and we therefore set the usercount to -1 in this specific case
 		 */
 		redirectIfDisabled() {
 			const allGroups = this.$store.getters.getGroups
@@ -581,12 +626,13 @@ export default {
 			}
 		},
 		closeModal() {
+			// eslint-disable-next-line vue/no-mutating-props
 			this.showConfig.showNewUserForm = false
 		},
 	},
 }
 </script>
-<style scoped>
+<style lang="scss" scoped>
 	.modal-wrapper {
 		margin: 2vh 0;
 		align-items: flex-start;
@@ -597,7 +643,6 @@ export default {
 		flex-direction: column;
 		align-items: center;
 		text-align: center;
-		overflow: auto;
 	}
 	.modal__item {
 		margin-bottom: 16px;
@@ -621,5 +666,17 @@ export default {
 	}
 	.row::v-deep .multiselect__single {
 		z-index: auto !important;
+	}
+
+	/* fake input for groups validation */
+	input#newgroups {
+		position: absolute;
+		opacity: 0;
+		/* The "hidden" input is behind the Multiselect, so in general it does
+		 * not receives clicks. However, with Firefox, after the validation
+		 * fails, it will receive the first click done on it, so its width needs
+		 * to be set to 0 to prevent that ("pointer-events: none" does not
+		 * prevent it). */
+		width: 0;
 	}
 </style>

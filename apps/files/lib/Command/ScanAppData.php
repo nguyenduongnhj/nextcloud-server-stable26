@@ -9,6 +9,7 @@
  * @author Joel S <joel.devbox@protonmail.com>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Roeland Jago Douma <roeland@famdouma.nl>
+ * @author Erik Wouters <6179932+EWouters@users.noreply.github.com>
  *
  * @license GNU AGPL version 3 or any later version
  *
@@ -38,6 +39,7 @@ use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\Files\StorageNotAvailableException;
 use OCP\IConfig;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -73,15 +75,6 @@ class ScanAppData extends Base {
 		$this->addArgument('folder', InputArgument::OPTIONAL, 'The appdata subfolder to scan', '');
 	}
 
-	public function checkScanWarning($fullPath, OutputInterface $output) {
-		$normalizedPath = basename(\OC\Files\Filesystem::normalizePath($fullPath));
-		$path = basename($fullPath);
-
-		if ($normalizedPath !== $path) {
-			$output->writeln("\t<error>Entry \"" . $fullPath . '" will not be accessible due to incompatible encoding</error>');
-		}
-	}
-
 	protected function scanFiles(OutputInterface $output, string $folder): int {
 		try {
 			$appData = $this->getAppDataFolder();
@@ -104,7 +97,7 @@ class ScanAppData extends Base {
 			null,
 			new ConnectionAdapter($connection),
 			\OC::$server->query(IEventDispatcher::class),
-			\OC::$server->getLogger()
+			\OC::$server->get(LoggerInterface::class)
 		);
 
 		# check on each file/folder if there was a user interrupt (ctrl-c) and throw an exception
@@ -124,12 +117,8 @@ class ScanAppData extends Base {
 			$output->writeln('Error while scanning, storage not available (' . $e->getMessage() . ')', OutputInterface::VERBOSITY_VERBOSE);
 		});
 
-		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFile', function ($path) use ($output) {
-			$this->checkScanWarning($path, $output);
-		});
-
-		$scanner->listen('\OC\Files\Utils\Scanner', 'scanFolder', function ($path) use ($output) {
-			$this->checkScanWarning($path, $output);
+		$scanner->listen('\OC\Files\Utils\Scanner', 'normalizedNameMismatch', function ($fullPath) use ($output) {
+			$output->writeln("\t<error>Entry \"" . $fullPath . '" will not be accessible due to incompatible encoding</error>');
 		});
 
 		try {
@@ -251,7 +240,7 @@ class ScanAppData extends Base {
 	protected function formatExecTime() {
 		$secs = round($this->execTime);
 		# convert seconds into HH:MM:SS form
-		return sprintf('%02d:%02d:%02d', ($secs / 3600), ($secs / 60 % 60), $secs % 60);
+		return sprintf('%02d:%02d:%02d', (int)($secs / 3600), ((int)($secs / 60) % 60), (int)$secs % 60);
 	}
 
 	protected function reconnectToDatabase(OutputInterface $output): Connection {

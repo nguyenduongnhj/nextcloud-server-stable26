@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @copyright Copyright (c) 2016, ownCloud, Inc.
  *
@@ -38,6 +39,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>
  *
  */
+
 namespace OCA\Provisioning_API\Tests\Controller;
 
 use Exception;
@@ -50,7 +52,9 @@ use OCA\Settings\Mailer\NewUserMailHelper;
 use OCP\Accounts\IAccount;
 use OCP\Accounts\IAccountManager;
 use OCP\Accounts\IAccountProperty;
+use OCP\Accounts\IAccountPropertyCollection;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\OCS\OCSException;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IConfig;
 use OCP\IGroup;
@@ -71,7 +75,6 @@ use Psr\Log\LoggerInterface;
 use Test\TestCase;
 
 class UsersControllerTest extends TestCase {
-
 	/** @var IUserManager|MockObject */
 	protected $userManager;
 	/** @var IConfig|MockObject */
@@ -165,11 +168,12 @@ class UsersControllerTest extends TestCase {
 			->with('MyCustomSearch')
 			->willReturn(['Admin' => [], 'Foo' => [], 'Bar' => []]);
 
-		$expected = ['users' => [
-			'Admin',
-			'Foo',
-			'Bar',
-		],
+		$expected = [
+			'users' => [
+				'Admin',
+				'Foo',
+				'Bar',
+			],
 		];
 		$this->assertEquals($expected, $this->api->getUsers('MyCustomSearch')->getData());
 	}
@@ -264,6 +268,12 @@ class UsersControllerTest extends TestCase {
 			->method('isAdmin')
 			->with('adminUser')
 			->willReturn(true);
+		$l10n = $this->createMock(IL10N::class);
+		$this->l10nFactory
+			->expects($this->once())
+			->method('get')
+			->with('provisioning_api')
+			->willReturn($l10n);
 
 		$this->api->addUser('AlreadyExistingUser', 'password', '', '', []);
 	}
@@ -488,7 +498,7 @@ class UsersControllerTest extends TestCase {
 			->method('generate')
 			->with(10)
 			->willReturnCallback(function () {
-				return (string)rand(1000000000, 9999999999);
+				return (string)rand(100000000, 999999999);
 			});
 
 		$this->assertTrue(key_exists(
@@ -687,7 +697,7 @@ class UsersControllerTest extends TestCase {
 
 		$this->assertTrue(key_exists(
 			'id',
-				$this->api->addUser('NewUser', 'PasswordOfTheNewUser', '', '', ['ExistingGroup'])->getData()
+			$this->api->addUser('NewUser', 'PasswordOfTheNewUser', '', '', ['ExistingGroup'])->getData()
 		));
 	}
 
@@ -711,7 +721,8 @@ class UsersControllerTest extends TestCase {
 		$this->logger
 			->expects($this->once())
 			->method('error')
-			->with('Failed addUser attempt with exception.',
+			->with(
+				'Failed addUser attempt with exception.',
 				[
 					'app' => 'ocs_api',
 					'exception' => $exception
@@ -935,9 +946,10 @@ class UsersControllerTest extends TestCase {
 	}
 
 	public function testGetUserDataAsAdmin() {
-		$group = $this->getMockBuilder(IGroup::class)
-			->disableOriginalConstructor()
-			->getMock();
+		$group0 = $this->createMock(IGroup::class);
+		$group1 = $this->createMock(IGroup::class);
+		$group2 = $this->createMock(IGroup::class);
+		$group3 = $this->createMock(IGroup::class);
 		$loggedInUser = $this->getMockBuilder(IUser::class)
 			->disableOriginalConstructor()
 			->getMock();
@@ -971,7 +983,7 @@ class UsersControllerTest extends TestCase {
 		$this->groupManager
 			->expects($this->any())
 			->method('getUserGroups')
-			->willReturn([$group, $group, $group]);
+			->willReturn([$group0, $group1, $group2]);
 		$this->groupManager
 			->expects($this->once())
 			->method('getSubAdmin')
@@ -979,17 +991,17 @@ class UsersControllerTest extends TestCase {
 		$subAdminManager
 			->expects($this->once())
 			->method('getSubAdminsGroups')
-			->willReturn([$group]);
-		$group->expects($this->at(0))
+			->willReturn([$group3]);
+		$group0->expects($this->once())
 			->method('getGID')
 			->willReturn('group0');
-		$group->expects($this->at(1))
+		$group1->expects($this->once())
 			->method('getGID')
 			->willReturn('group1');
-		$group->expects($this->at(2))
+		$group2->expects($this->once())
 			->method('getGID')
 			->willReturn('group2');
-		$group->expects($this->at(3))
+		$group3->expects($this->once())
 			->method('getGID')
 			->willReturn('group3');
 
@@ -997,13 +1009,19 @@ class UsersControllerTest extends TestCase {
 			IAccountManager::PROPERTY_ADDRESS => ['value' => 'address'],
 			IAccountManager::PROPERTY_PHONE => ['value' => 'phone'],
 			IAccountManager::PROPERTY_TWITTER => ['value' => 'twitter'],
+			IAccountManager::PROPERTY_FEDIVERSE => ['value' => 'fediverse'],
 			IAccountManager::PROPERTY_WEBSITE => ['value' => 'website'],
+			IAccountManager::PROPERTY_ORGANISATION => ['value' => 'organisation'],
+			IAccountManager::PROPERTY_ROLE => ['value' => 'role'],
+			IAccountManager::PROPERTY_HEADLINE => ['value' => 'headline'],
+			IAccountManager::PROPERTY_BIOGRAPHY => ['value' => 'biography'],
+			IAccountManager::PROPERTY_PROFILE_ENABLED => ['value' => '1'],
 		]);
 		$this->config
-			->expects($this->at(0))
 			->method('getUserValue')
-			->with('UID', 'core', 'enabled', 'true')
-			->willReturn('true');
+			->willReturnMap([
+				['UID', 'core', 'enabled', 'true', 'true'],
+			]);
 		$this->api
 			->expects($this->once())
 			->method('fillStorageInfo')
@@ -1055,10 +1073,12 @@ class UsersControllerTest extends TestCase {
 			'quota' => ['DummyValue'],
 			'email' => 'demo@nextcloud.com',
 			'displayname' => 'Demo User',
+			'display-name' => 'Demo User',
 			'phone' => 'phone',
 			'address' => 'address',
 			'website' => 'website',
 			'twitter' => 'twitter',
+			'fediverse' => 'fediverse',
 			'groups' => ['group0', 'group1', 'group2'],
 			'language' => 'de',
 			'locale' => null,
@@ -1067,7 +1087,13 @@ class UsersControllerTest extends TestCase {
 				'setPassword' => true,
 			],
 			'additional_mail' => [],
+			'organisation' => 'organisation',
+			'role' => 'role',
+			'headline' => 'headline',
+			'biography' => 'biography',
+			'profile_enabled' => '1',
 			'notify_email' => null,
+			'manager' => '',
 		];
 		$this->assertEquals($expected, $this->invokePrivate($this->api, 'getUserData', ['UID']));
 	}
@@ -1122,10 +1148,10 @@ class UsersControllerTest extends TestCase {
 			->method('getSubAdmin')
 			->willReturn($subAdminManager);
 		$this->config
-			->expects($this->at(0))
 			->method('getUserValue')
-			->with('UID', 'core', 'enabled', 'true')
-			->willReturn('true');
+			->willReturnMap([
+				['UID', 'core', 'enabled', 'true', 'true'],
+			]);
 		$this->api
 			->expects($this->once())
 			->method('fillStorageInfo')
@@ -1142,9 +1168,8 @@ class UsersControllerTest extends TestCase {
 			->method('getDisplayName')
 			->willReturn('Demo User');
 		$targetUser
-			->expects($this->once())
-			->method('getHome')
-			->willReturn('/var/www/newtcloud/data/UID');
+			->expects($this->never())
+			->method('getHome');
 		$targetUser
 			->expects($this->once())
 			->method('getLastLogin')
@@ -1165,7 +1190,13 @@ class UsersControllerTest extends TestCase {
 			IAccountManager::PROPERTY_ADDRESS => ['value' => 'address'],
 			IAccountManager::PROPERTY_PHONE => ['value' => 'phone'],
 			IAccountManager::PROPERTY_TWITTER => ['value' => 'twitter'],
+			IAccountManager::PROPERTY_FEDIVERSE => ['value' => 'fediverse'],
 			IAccountManager::PROPERTY_WEBSITE => ['value' => 'website'],
+			IAccountManager::PROPERTY_ORGANISATION => ['value' => 'organisation'],
+			IAccountManager::PROPERTY_ROLE => ['value' => 'role'],
+			IAccountManager::PROPERTY_HEADLINE => ['value' => 'headline'],
+			IAccountManager::PROPERTY_BIOGRAPHY => ['value' => 'biography'],
+			IAccountManager::PROPERTY_PROFILE_ENABLED => ['value' => '1'],
 		]);
 
 		$this->l10nFactory
@@ -1177,17 +1208,18 @@ class UsersControllerTest extends TestCase {
 		$expected = [
 			'id' => 'UID',
 			'enabled' => true,
-			'storageLocation' => '/var/www/newtcloud/data/UID',
 			'lastLogin' => 1521191471000,
 			'backend' => 'Database',
 			'subadmin' => [],
 			'quota' => ['DummyValue'],
 			'email' => 'demo@nextcloud.com',
 			'displayname' => 'Demo User',
+			'display-name' => 'Demo User',
 			'phone' => 'phone',
 			'address' => 'address',
 			'website' => 'website',
 			'twitter' => 'twitter',
+			'fediverse' => 'fediverse',
 			'groups' => [],
 			'language' => 'da',
 			'locale' => null,
@@ -1196,7 +1228,13 @@ class UsersControllerTest extends TestCase {
 				'setPassword' => true,
 			],
 			'additional_mail' => [],
+			'organisation' => 'organisation',
+			'role' => 'role',
+			'headline' => 'headline',
+			'biography' => 'biography',
+			'profile_enabled' => '1',
 			'notify_email' => null,
+			'manager' => '',
 		];
 		$this->assertEquals($expected, $this->invokePrivate($this->api, 'getUserData', ['UID']));
 	}
@@ -1314,9 +1352,8 @@ class UsersControllerTest extends TestCase {
 			->method('getUID')
 			->willReturn('UID');
 		$targetUser
-			->expects($this->once())
-			->method('getHome')
-			->willReturn('/var/www/newtcloud/data/UID');
+			->expects($this->never())
+			->method('getHome');
 		$targetUser
 			->expects($this->once())
 			->method('getLastLogin')
@@ -1333,7 +1370,13 @@ class UsersControllerTest extends TestCase {
 			IAccountManager::PROPERTY_ADDRESS => ['value' => 'address'],
 			IAccountManager::PROPERTY_PHONE => ['value' => 'phone'],
 			IAccountManager::PROPERTY_TWITTER => ['value' => 'twitter'],
+			IAccountManager::PROPERTY_FEDIVERSE => ['value' => 'fediverse'],
 			IAccountManager::PROPERTY_WEBSITE => ['value' => 'website'],
+			IAccountManager::PROPERTY_ORGANISATION => ['value' => 'organisation'],
+			IAccountManager::PROPERTY_ROLE => ['value' => 'role'],
+			IAccountManager::PROPERTY_HEADLINE => ['value' => 'headline'],
+			IAccountManager::PROPERTY_BIOGRAPHY => ['value' => 'biography'],
+			IAccountManager::PROPERTY_PROFILE_ENABLED => ['value' => '1'],
 		]);
 
 		$this->l10nFactory
@@ -1344,17 +1387,18 @@ class UsersControllerTest extends TestCase {
 
 		$expected = [
 			'id' => 'UID',
-			'storageLocation' => '/var/www/newtcloud/data/UID',
 			'lastLogin' => 1521191471000,
 			'backend' => 'Database',
 			'subadmin' => [],
 			'quota' => ['DummyValue'],
 			'email' => 'subadmin@nextcloud.com',
 			'displayname' => 'Subadmin User',
+			'display-name' => 'Subadmin User',
 			'phone' => 'phone',
 			'address' => 'address',
 			'website' => 'website',
 			'twitter' => 'twitter',
+			'fediverse' => 'fediverse',
 			'groups' => [],
 			'language' => 'ru',
 			'locale' => null,
@@ -1363,7 +1407,13 @@ class UsersControllerTest extends TestCase {
 				'setPassword' => false,
 			],
 			'additional_mail' => [],
+			'organisation' => 'organisation',
+			'role' => 'role',
+			'headline' => 'headline',
+			'biography' => 'biography',
+			'profile_enabled' => '1',
 			'notify_email' => null,
+			'manager' => '',
 		];
 		$this->assertEquals($expected, $this->invokePrivate($this->api, 'getUserData', ['UID']));
 	}
@@ -1451,7 +1501,8 @@ class UsersControllerTest extends TestCase {
 		$targetUser
 			->expects($this->once())
 			->method('setDisplayName')
-			->with('NewDisplayName');
+			->with('NewDisplayName')
+			->willReturn(true);
 		$targetUser
 			->expects($this->any())
 			->method('getUID')
@@ -1498,7 +1549,162 @@ class UsersControllerTest extends TestCase {
 		$this->assertEquals([], $this->api->editUser('UserToEdit', 'email', 'demo@nextcloud.com')->getData());
 	}
 
+	public function testEditUserRegularUserSelfEditAddAdditionalEmailValid(): void {
+		$loggedInUser = $this->getMockBuilder(IUser::class)
+			->disableOriginalConstructor()
+			->getMock();
+		$loggedInUser
+			->expects($this->any())
+			->method('getUID')
+			->willReturn('UID');
+		$targetUser = $this->getMockBuilder(IUser::class)
+			->disableOriginalConstructor()
+			->getMock();
+		$this->userSession
+			->expects($this->once())
+			->method('getUser')
+			->willReturn($loggedInUser);
+		$this->userManager
+			->expects($this->once())
+			->method('get')
+			->with('UserToEdit')
+			->willReturn($targetUser);
+		$targetUser
+			->expects($this->any())
+			->method('getUID')
+			->willReturn('UID');
 
+		$backend = $this->createMock(UserInterface::class);
+		$targetUser
+			->expects($this->any())
+			->method('getBackend')
+			->willReturn($backend);
+
+		$userAccount = $this->createMock(IAccount::class);
+
+		$this->accountManager
+			->expects($this->once())
+			->method('getAccount')
+			->with($targetUser)
+			->willReturn($userAccount);
+		$this->accountManager
+			->expects($this->once())
+			->method('updateAccount')
+			->with($userAccount);
+
+		$this->assertEquals([], $this->api->editUser('UserToEdit', 'additional_mail', 'demo1@nextcloud.com')->getData());
+	}
+
+	public function testEditUserRegularUserSelfEditAddAdditionalEmailMainAddress(): void {
+		$loggedInUser = $this->getMockBuilder(IUser::class)
+			->disableOriginalConstructor()
+			->getMock();
+		$loggedInUser
+			->expects($this->any())
+			->method('getUID')
+			->willReturn('UID');
+		$targetUser = $this->getMockBuilder(IUser::class)
+			->disableOriginalConstructor()
+			->getMock();
+		$this->userSession
+			->expects($this->once())
+			->method('getUser')
+			->willReturn($loggedInUser);
+		$this->userManager
+			->expects($this->once())
+			->method('get')
+			->with('UserToEdit')
+			->willReturn($targetUser);
+		$targetUser
+			->expects($this->any())
+			->method('getUID')
+			->willReturn('UID');
+
+		$backend = $this->createMock(UserInterface::class);
+		$targetUser
+			->expects($this->any())
+			->method('getBackend')
+			->willReturn($backend);
+		$targetUser
+			->expects($this->any())
+			->method('getSystemEMailAddress')
+			->willReturn('demo@nextcloud.com');
+
+		$userAccount = $this->createMock(IAccount::class);
+
+		$this->accountManager
+			->expects($this->never())
+			->method('getAccount')
+			->with($targetUser)
+			->willReturn($userAccount);
+		$this->accountManager
+			->expects($this->never())
+			->method('updateAccount')
+			->with($userAccount);
+
+		$this->expectException(OCSException::class);
+		$this->expectExceptionCode(102);
+		$this->api->editUser('UserToEdit', 'additional_mail', 'demo@nextcloud.com')->getData();
+	}
+
+	public function testEditUserRegularUserSelfEditAddAdditionalEmailDuplicate(): void {
+		$loggedInUser = $this->getMockBuilder(IUser::class)
+			->disableOriginalConstructor()
+			->getMock();
+		$loggedInUser
+			->expects($this->any())
+			->method('getUID')
+			->willReturn('UID');
+		$targetUser = $this->getMockBuilder(IUser::class)
+			->disableOriginalConstructor()
+			->getMock();
+		$this->userSession
+			->expects($this->once())
+			->method('getUser')
+			->willReturn($loggedInUser);
+		$this->userManager
+			->expects($this->once())
+			->method('get')
+			->with('UserToEdit')
+			->willReturn($targetUser);
+		$targetUser
+			->expects($this->any())
+			->method('getUID')
+			->willReturn('UID');
+
+		$backend = $this->createMock(UserInterface::class);
+		$targetUser
+			->expects($this->any())
+			->method('getBackend')
+			->willReturn($backend);
+
+		$property = $this->createMock(IAccountProperty::class);
+		$property->method('getValue')
+			->willReturn('demo1@nextcloud.com');
+		$collection = $this->createMock(IAccountPropertyCollection::class);
+		$collection->method('getPropertyByValue')
+			->with('demo1@nextcloud.com')
+			->willReturn($property);
+
+		$userAccount = $this->createMock(IAccount::class);
+		$userAccount->method('getPropertyCollection')
+			->with(IAccountManager::COLLECTION_EMAIL)
+			->willReturn($collection);
+
+		$this->accountManager
+			->expects($this->once())
+			->method('getAccount')
+			->with($targetUser)
+			->willReturn($userAccount);
+		$this->accountManager
+			->expects($this->never())
+			->method('updateAccount')
+			->with($userAccount);
+
+		$this->expectException(OCSException::class);
+		$this->expectExceptionCode(102);
+		$this->api->editUser('UserToEdit', 'additional_mail', 'demo1@nextcloud.com')->getData();
+	}
 
 	public function testEditUserRegularUserSelfEditChangeEmailInvalid() {
 		$this->expectException(\OCP\AppFramework\OCS\OCSException::class);
@@ -1540,9 +1746,15 @@ class UsersControllerTest extends TestCase {
 	public function selfEditChangePropertyProvider() {
 		return [
 			[IAccountManager::PROPERTY_TWITTER, '@oldtwitter', '@newtwitter'],
+			[IAccountManager::PROPERTY_FEDIVERSE, '@oldFediverse@floss.social', '@newFediverse@floss.social'],
 			[IAccountManager::PROPERTY_PHONE, '1234', '12345'],
 			[IAccountManager::PROPERTY_ADDRESS, 'Something street 2', 'Another street 3'],
 			[IAccountManager::PROPERTY_WEBSITE, 'https://examplesite1', 'https://examplesite2'],
+			[IAccountManager::PROPERTY_ORGANISATION, 'Organisation A', 'Organisation B'],
+			[IAccountManager::PROPERTY_ROLE, 'Human', 'Alien'],
+			[IAccountManager::PROPERTY_HEADLINE, 'Hi', 'Hello'],
+			[IAccountManager::PROPERTY_BIOGRAPHY, 'A biography', 'Another biography'],
+			[IAccountManager::PROPERTY_PROFILE_ENABLED, '1', '0'],
 		];
 	}
 
@@ -1611,9 +1823,15 @@ class UsersControllerTest extends TestCase {
 			[IAccountManager::PROPERTY_DISPLAYNAME, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
 			[IAccountManager::PROPERTY_EMAIL, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
 			[IAccountManager::PROPERTY_TWITTER, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
+			[IAccountManager::PROPERTY_FEDIVERSE, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
 			[IAccountManager::PROPERTY_PHONE, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
 			[IAccountManager::PROPERTY_ADDRESS, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
 			[IAccountManager::PROPERTY_WEBSITE, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
+			[IAccountManager::PROPERTY_ORGANISATION, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
+			[IAccountManager::PROPERTY_ROLE, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
+			[IAccountManager::PROPERTY_HEADLINE, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
+			[IAccountManager::PROPERTY_BIOGRAPHY, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
+			[IAccountManager::PROPERTY_PROFILE_ENABLED, IAccountManager::SCOPE_LOCAL, IAccountManager::SCOPE_FEDERATED],
 		];
 	}
 
@@ -3487,10 +3705,17 @@ class UsersControllerTest extends TestCase {
 					'quota' => ['DummyValue'],
 					'email' => 'demo@nextcloud.com',
 					'displayname' => 'Demo User',
+					'display-name' => 'Demo User',
 					'phone' => 'phone',
 					'address' => 'address',
 					'website' => 'website',
-					'twitter' => 'twitter'
+					'twitter' => 'twitter',
+					'fediverse' => 'fediverse',
+					'organisation' => 'organisation',
+					'role' => 'role',
+					'headline' => 'headline',
+					'biography' => 'biography',
+					'profile_enabled' => '1'
 				]
 			);
 
@@ -3499,11 +3724,18 @@ class UsersControllerTest extends TestCase {
 			'enabled' => 'true',
 			'quota' => ['DummyValue'],
 			'email' => 'demo@nextcloud.com',
+			'displayname' => 'Demo User',
+			'display-name' => 'Demo User',
 			'phone' => 'phone',
 			'address' => 'address',
 			'website' => 'website',
 			'twitter' => 'twitter',
-			'display-name' => 'Demo User'
+			'fediverse' => 'fediverse',
+			'organisation' => 'organisation',
+			'role' => 'role',
+			'headline' => 'headline',
+			'biography' => 'biography',
+			'profile_enabled' => '1',
 		];
 
 		$this->assertSame($expected, $api->getCurrentUser()->getData());
@@ -3560,14 +3792,22 @@ class UsersControllerTest extends TestCase {
 			'address' => 'address',
 			'website' => 'website',
 			'twitter' => 'twitter',
-			'displayname' => 'Demo User'
+			'fediverse' => 'fediverse',
+			'displayname' => 'Demo User',
+			'display-name' => 'Demo User',
+			'organisation' => 'organisation',
+			'role' => 'role',
+			'headline' => 'headline',
+			'biography' => 'biography',
+			'profile_enabled' => '1'
 		];
 
-		$api->expects($this->at(0))->method('getUserData')
-			->with('uid', false)
-			->willReturn($expected);
-		$api->expects($this->at(1))->method('getUserData')
-			->with('currentuser', true)
+		$api->expects($this->exactly(2))
+			->method('getUserData')
+			->withConsecutive(
+				['uid', false],
+				['currentuser', true],
+			)
 			->willReturn($expected);
 
 		$this->assertSame($expected, $api->getUser('uid')->getData());
@@ -3753,11 +3993,11 @@ class UsersControllerTest extends TestCase {
 			->willReturn('abc@example.org');
 		$emailTemplate = $this->createMock(IEMailTemplate::class);
 		$this->newUserMailHelper
-			->expects($this->at(0))
+			->expects($this->once())
 			->method('generateTemplate')
 			->willReturn($emailTemplate);
 		$this->newUserMailHelper
-			->expects($this->at(1))
+			->expects($this->once())
 			->method('sendMail')
 			->with($targetUser, $emailTemplate);
 
@@ -3804,11 +4044,11 @@ class UsersControllerTest extends TestCase {
 			->getMock();
 		$emailTemplate = $this->createMock(IEMailTemplate::class);
 		$this->newUserMailHelper
-			->expects($this->at(0))
+			->expects($this->once())
 			->method('generateTemplate')
 			->willReturn($emailTemplate);
 		$this->newUserMailHelper
-			->expects($this->at(1))
+			->expects($this->once())
 			->method('sendMail')
 			->with($targetUser, $emailTemplate);
 
@@ -3857,11 +4097,11 @@ class UsersControllerTest extends TestCase {
 			->willReturn('abc@example.org');
 		$emailTemplate = $this->createMock(IEMailTemplate::class);
 		$this->newUserMailHelper
-			->expects($this->at(0))
+			->expects($this->once())
 			->method('generateTemplate')
 			->willReturn($emailTemplate);
 		$this->newUserMailHelper
-			->expects($this->at(1))
+			->expects($this->once())
 			->method('sendMail')
 			->with($targetUser, $emailTemplate)
 			->willThrowException(new \Exception());
@@ -3878,6 +4118,12 @@ class UsersControllerTest extends TestCase {
 				IAccountManager::PROPERTY_ADDRESS,
 				IAccountManager::PROPERTY_WEBSITE,
 				IAccountManager::PROPERTY_TWITTER,
+				IAccountManager::PROPERTY_FEDIVERSE,
+				IAccountManager::PROPERTY_ORGANISATION,
+				IAccountManager::PROPERTY_ROLE,
+				IAccountManager::PROPERTY_HEADLINE,
+				IAccountManager::PROPERTY_BIOGRAPHY,
+				IAccountManager::PROPERTY_PROFILE_ENABLED,
 			]],
 			[true, ISetDisplayNameBackend::class, [
 				IAccountManager::PROPERTY_DISPLAYNAME,
@@ -3887,6 +4133,12 @@ class UsersControllerTest extends TestCase {
 				IAccountManager::PROPERTY_ADDRESS,
 				IAccountManager::PROPERTY_WEBSITE,
 				IAccountManager::PROPERTY_TWITTER,
+				IAccountManager::PROPERTY_FEDIVERSE,
+				IAccountManager::PROPERTY_ORGANISATION,
+				IAccountManager::PROPERTY_ROLE,
+				IAccountManager::PROPERTY_HEADLINE,
+				IAccountManager::PROPERTY_BIOGRAPHY,
+				IAccountManager::PROPERTY_PROFILE_ENABLED,
 			]],
 			[true, UserInterface::class, [
 				IAccountManager::PROPERTY_EMAIL,
@@ -3895,6 +4147,12 @@ class UsersControllerTest extends TestCase {
 				IAccountManager::PROPERTY_ADDRESS,
 				IAccountManager::PROPERTY_WEBSITE,
 				IAccountManager::PROPERTY_TWITTER,
+				IAccountManager::PROPERTY_FEDIVERSE,
+				IAccountManager::PROPERTY_ORGANISATION,
+				IAccountManager::PROPERTY_ROLE,
+				IAccountManager::PROPERTY_HEADLINE,
+				IAccountManager::PROPERTY_BIOGRAPHY,
+				IAccountManager::PROPERTY_PROFILE_ENABLED,
 			]],
 		];
 	}
@@ -3941,7 +4199,7 @@ class UsersControllerTest extends TestCase {
 
 		$account = $this->createMock(IAccount::class);
 		$account->method('getProperty')
-		  ->will($this->returnValueMap($mockedProperties));
+			->will($this->returnValueMap($mockedProperties));
 
 		$this->accountManager->expects($this->any())->method('getAccount')
 			->with($targetUser)

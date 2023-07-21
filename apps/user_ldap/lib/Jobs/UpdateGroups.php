@@ -28,33 +28,30 @@
  */
 namespace OCA\User_LDAP\Jobs;
 
-use OC\BackgroundJob\TimedJob;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\TimedJob;
 use OCA\User_LDAP\Group_Proxy;
+use OCP\DB\Exception;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Group\Events\UserAddedEvent;
 use OCP\Group\Events\UserRemovedEvent;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\IGroupManager;
-use OCP\ILogger;
 use OCP\IUser;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
 
 class UpdateGroups extends TimedJob {
-	private $groupsFromDB;
-
-	/** @var Group_Proxy */
-	private $groupBackend;
-	/** @var IEventDispatcher */
-	private $dispatcher;
-	/** @var IGroupManager */
-	private $groupManager;
-	/** @var IUserManager */
-	private $userManager;
-	/** @var LoggerInterface */
-	private $logger;
-	/** @var IDBConnection */
-	private $dbc;
+	/** @var ?array<string, array{owncloudusers: string, owncloudname: string}>  */
+	private ?array $groupsFromDB = null;
+	private Group_Proxy $groupBackend;
+	private IEventDispatcher $dispatcher;
+	private IGroupManager $groupManager;
+	private IUserManager $userManager;
+	private LoggerInterface $logger;
+	private IDBConnection $dbc;
 
 	public function __construct(
 		Group_Proxy $groupBackend,
@@ -62,9 +59,12 @@ class UpdateGroups extends TimedJob {
 		IGroupManager $groupManager,
 		IUserManager $userManager,
 		LoggerInterface $logger,
-		IDBConnection $dbc
+		IDBConnection $dbc,
+		IConfig $config,
+		ITimeFactory $timeFactory
 	) {
-		$this->interval = $this->getRefreshInterval();
+		parent::__construct($timeFactory);
+		$this->interval = (int)$config->getAppValue('user_ldap', 'bgjRefreshInterval', '3600');
 		$this->groupBackend = $groupBackend;
 		$this->dispatcher = $dispatcher;
 		$this->groupManager = $groupManager;
@@ -74,30 +74,31 @@ class UpdateGroups extends TimedJob {
 	}
 
 	/**
-	 * @return int
-	 */
-	private function getRefreshInterval() {
-		//defaults to every hour
-		return \OC::$server->getConfig()->getAppValue('user_ldap', 'bgjRefreshInterval', 3600);
-	}
-
-	/**
 	 * @param mixed $argument
+	 * @throws Exception
 	 */
-	public function run($argument) {
+	public function run($argument): void {
 		$this->updateGroups();
 	}
 
-	public function updateGroups() {
-		\OCP\Util::writeLog('user_ldap', 'Run background job "updateGroups"', ILogger::DEBUG);
+	/**
+	 * @throws Exception
+	 */
+	public function updateGroups(): void {
+		$this->logger->debug(
+			'Run background job "updateGroups"',
+			['app' => 'user_ldap']
+		);
 
+		/** @var string[] $knownGroups */
 		$knownGroups = array_keys($this->getKnownGroups());
 		$actualGroups = $this->groupBackend->getGroups();
 
 		if (empty($actualGroups) && empty($knownGroups)) {
-			\OCP\Util::writeLog('user_ldap',
+			$this->logger->info(
 				'bgJ "updateGroups" – groups do not seem to be configured properly, aborting.',
-				ILogger::INFO);
+				['app' => 'user_ldap']
+			);
 			return;
 		}
 
@@ -105,21 +106,25 @@ class UpdateGroups extends TimedJob {
 		$this->handleCreatedGroups(array_diff($actualGroups, $knownGroups));
 		$this->handleRemovedGroups(array_diff($knownGroups, $actualGroups));
 
-		\OCP\Util::writeLog('user_ldap', 'bgJ "updateGroups" – Finished.', ILogger::DEBUG);
+		$this->logger->debug(
+			'bgJ "updateGroups" – Finished.',
+			['app' => 'user_ldap']
+		);
 	}
 
 	/**
-	 * @return array
+	 * @return array<string, array{owncloudusers: string, owncloudname: string}>
+	 * @throws Exception
 	 */
-	private function getKnownGroups() {
+	private function getKnownGroups(): array {
 		if (is_array($this->groupsFromDB)) {
-			$this->groupsFromDB;
+			return $this->groupsFromDB;
 		}
 		$qb = $this->dbc->getQueryBuilder();
 		$qb->select(['owncloudname', 'owncloudusers'])
 			->from('ldap_group_members');
 
-		$qResult = $qb->execute();
+		$qResult = $qb->executeQuery();
 		$result = $qResult->fetchAll();
 		$qResult->closeCursor();
 
@@ -131,7 +136,11 @@ class UpdateGroups extends TimedJob {
 		return $this->groupsFromDB;
 	}
 
-	private function handleKnownGroups(array $groups) {
+	/**
+	 * @param string[] $groups
+	 * @throws Exception
+	 */
+	private function handleKnownGroups(array $groups): void {
 		$this->logger->debug(
 			'bgJ "updateGroups" – Dealing with known Groups.',
 			['app' => 'user_ldap']
@@ -141,15 +150,24 @@ class UpdateGroups extends TimedJob {
 			->set('owncloudusers', $qb->createParameter('members'))
 			->where($qb->expr()->eq('owncloudname', $qb->createParameter('groupId')));
 
-		if (!is_array($this->groupsFromDB)) {
-			$this->getKnownGroups();
-		}
+		$groupsFromDB = $this->getKnownGroups();
 		foreach ($groups as $group) {
-			$knownUsers = unserialize($this->groupsFromDB[$group]['owncloudusers']);
+			$knownUsers = unserialize($groupsFromDB[$group]['owncloudusers']);
 			$actualUsers = $this->groupBackend->usersInGroup($group);
 			$hasChanged = false;
 
 			$groupObject = $this->groupManager->get($group);
+			if ($groupObject === null) {
+				/* We are not expecting the group to not be found since it was returned by $this->groupBackend->getGroups() */
+				$this->logger->error(
+					'bgJ "updateGroups" – Failed to get group {group} for update',
+					[
+						'app' => 'user_ldap',
+						'group' => $group
+					]
+				);
+				continue;
+			}
 			foreach (array_diff($knownUsers, $actualUsers) as $removedUser) {
 				$userObject = $this->userManager->get($removedUser);
 				if ($userObject instanceof IUser) {
@@ -185,7 +203,7 @@ class UpdateGroups extends TimedJob {
 					'members' => serialize($actualUsers),
 					'groupId' => $group
 				]);
-				$qb->execute();
+				$qb->executeStatement();
 			}
 		}
 		$this->logger->debug(
@@ -196,48 +214,65 @@ class UpdateGroups extends TimedJob {
 
 	/**
 	 * @param string[] $createdGroups
+	 * @throws Exception
 	 */
-	private function handleCreatedGroups($createdGroups) {
-		\OCP\Util::writeLog('user_ldap', 'bgJ "updateGroups" – dealing with created Groups.', ILogger::DEBUG);
+	private function handleCreatedGroups(array $createdGroups): void {
+		$this->logger->debug(
+			'bgJ "updateGroups" – dealing with created Groups.',
+			['app' => 'user_ldap']
+		);
 
 		$query = $this->dbc->getQueryBuilder();
 		$query->insert('ldap_group_members')
 			->setValue('owncloudname', $query->createParameter('owncloudname'))
 			->setValue('owncloudusers', $query->createParameter('owncloudusers'));
+
 		foreach ($createdGroups as $createdGroup) {
-			\OCP\Util::writeLog('user_ldap',
+			$this->logger->info(
 				'bgJ "updateGroups" – new group "' . $createdGroup . '" found.',
-				ILogger::INFO);
+				['app' => 'user_ldap']
+			);
 			$users = serialize($this->groupBackend->usersInGroup($createdGroup));
 
 			$query->setParameter('owncloudname', $createdGroup)
 				->setParameter('owncloudusers', $users);
-			$query->execute();
+			$query->executeStatement();
 		}
-		\OCP\Util::writeLog('user_ldap',
+		$this->logger->debug(
 			'bgJ "updateGroups" – FINISHED dealing with created Groups.',
-			ILogger::DEBUG);
+			['app' => 'user_ldap']
+		);
 	}
 
 	/**
 	 * @param string[] $removedGroups
+	 * @throws Exception
 	 */
-	private function handleRemovedGroups($removedGroups) {
-		\OCP\Util::writeLog('user_ldap', 'bgJ "updateGroups" – dealing with removed groups.', ILogger::DEBUG);
+	private function handleRemovedGroups(array $removedGroups): void {
+		$this->logger->debug(
+			'bgJ "updateGroups" – dealing with removed groups.',
+			['app' => 'user_ldap']
+		);
 
 		$query = $this->dbc->getQueryBuilder();
 		$query->delete('ldap_group_members')
-			->where($query->expr()->eq('owncloudname', $query->createParameter('owncloudname')));
+			->where($query->expr()->in('owncloudname', $query->createParameter('owncloudnames')));
 
-		foreach ($removedGroups as $removedGroup) {
-			\OCP\Util::writeLog('user_ldap',
-				'bgJ "updateGroups" – group "' . $removedGroup . '" was removed.',
-				ILogger::INFO);
-			$query->setParameter('owncloudname', $removedGroup);
-			$query->execute();
+		foreach (array_chunk($removedGroups, 1000) as $removedGroupsChunk) {
+			$this->logger->info(
+				'bgJ "updateGroups" – groups {removedGroups} were removed.',
+				[
+					'app' => 'user_ldap',
+					'removedGroups' => $removedGroupsChunk
+				]
+			);
+			$query->setParameter('owncloudnames', $removedGroupsChunk, IQueryBuilder::PARAM_STR_ARRAY);
+			$query->executeStatement();
 		}
-		\OCP\Util::writeLog('user_ldap',
+
+		$this->logger->debug(
 			'bgJ "updateGroups" – FINISHED dealing with removed groups.',
-			ILogger::DEBUG);
+			['app' => 'user_ldap']
+		);
 	}
 }

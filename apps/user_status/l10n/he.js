@@ -8,7 +8,8 @@ OC.L10N.register(
     "Vacationing" : "בחופש",
     "Working remotely" : "בעבודה מרחוק",
     "User status" : "מצב משתמש",
-    "Clear status message after" : "מחיקת הודעת מצב לאחר",
+    "Clear status after" : "לפנות את המצב לאחר",
+    "What is your status?" : "מה המצב שלך?",
     "Set status" : "הגדרת מצב",
     "Online status" : "מצב מקוון",
     "Status message" : "הודעת מצב",
@@ -31,8 +32,6 @@ OC.L10N.register(
     "1 hour" : "שעה",
     "4 hours" : "4 שעות",
     "Mute all notifications" : "השתקת כל ההתראות",
-    "Appear offline" : "להופיע במצב בלתי מקוון",
-    "Clear status after" : "לפנות את המצב לאחר",
-    "What's your status?" : "מה המצב שלך?"
+    "Appear offline" : "להופיע במצב בלתי מקוון"
 },
 "nplurals=4; plural=(n == 1 && n % 1 == 0) ? 0 : (n == 2 && n % 1 == 0) ? 1: (n % 10 == 0 && n % 1 == 0 && n > 10) ? 2 : 3;");

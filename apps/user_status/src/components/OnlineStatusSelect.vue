@@ -23,12 +23,13 @@
 	<div class="user-status-online-select">
 		<input :id="id"
 			:checked="checked"
-			class="user-status-online-select__input"
+			class="hidden-visually user-status-online-select__input"
 			type="radio"
 			name="user-status-online"
 			@change="onChange">
-		<label :for="id" :class="icon" class="user-status-online-select__label">
+		<label :for="id" class="user-status-online-select__label">
 			{{ label }}
+			<span :class="icon" aria-hidden="true" role="img" />
 			<em class="user-status-online-select__subline">{{ subline }}</em>
 		</label>
 	</div>
@@ -76,21 +77,13 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@use 'sass:math';
 $icon-size: 24px;
 $label-padding: 8px;
 
 .user-status-online-select {
-	// Inputs are here for keyboard navigation, they are not visually visible
-	&__input {
-		position: absolute;
-		top: auto;
-		left: -10000px;
-		overflow: hidden;
-		width: 1px;
-		height: 1px;
-	}
-
 	&__label {
+		position: relative;
 		display: block;
 		margin: $label-padding;
 		padding: $label-padding;
@@ -105,12 +98,25 @@ $label-padding: 8px;
 		& {
 			cursor: pointer;
 		}
+
+		span {
+			position: absolute;
+			top: calc(50% - math.div($icon-size, 2));
+			left: $label-padding;
+			display: block;
+			width: $icon-size;
+			height: $icon-size;
+		}
 	}
 
 	&__input:checked + &__label,
 	&__input:focus + &__label,
 	&__label:hover {
-		border-color: var(--color-primary);
+		border-color: var(--color-primary-element);
+	}
+
+	&__label:active {
+		border-color: var(--color-border-dark);
 	}
 
 	&__subline {

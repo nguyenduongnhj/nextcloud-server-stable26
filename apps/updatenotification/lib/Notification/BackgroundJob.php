@@ -26,10 +26,11 @@ declare(strict_types=1);
  */
 namespace OCA\UpdateNotification\Notification;
 
-use OC\BackgroundJob\TimedJob;
 use OC\Installer;
 use OC\Updater\VersionCheck;
 use OCP\App\IAppManager;
+use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\BackgroundJob\TimedJob;
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
 use OCP\IGroup;
@@ -60,17 +61,14 @@ class BackgroundJob extends TimedJob {
 	/** @var string[] */
 	protected $users;
 
-	/**
-	 * NotificationBackgroundJob constructor.
-	 *
-	 * @param IConfig $config
-	 * @param IManager $notificationManager
-	 * @param IGroupManager $groupManager
-	 * @param IAppManager $appManager
-	 * @param IClientService $client
-	 * @param Installer $installer
-	 */
-	public function __construct(IConfig $config, IManager $notificationManager, IGroupManager $groupManager, IAppManager $appManager, IClientService $client, Installer $installer) {
+	public function __construct(ITimeFactory $timeFactory,
+								IConfig $config,
+								IManager $notificationManager,
+								IGroupManager $groupManager,
+								IAppManager $appManager,
+								IClientService $client,
+								Installer $installer) {
+		parent::__construct($timeFactory);
 		// Run once a day
 		$this->setInterval(60 * 60 * 24);
 
@@ -83,6 +81,16 @@ class BackgroundJob extends TimedJob {
 	}
 
 	protected function run($argument) {
+		if (\OC::$CLI && !$this->config->getSystemValueBool('debug', false)) {
+			try {
+				// Jitter the pinging of the updater server and the appstore a bit.
+				// Otherwise all Nextcloud installations are pinging the servers
+				// in one of 288
+				sleep(random_int(1, 180));
+			} catch (\Exception $e) {
+			}
+		}
+
 		$this->checkCoreUpdate();
 		$this->checkAppUpdates();
 	}
@@ -100,14 +108,14 @@ class BackgroundJob extends TimedJob {
 
 		$status = $updater->check();
 		if ($status === false) {
-			$errors = 1 + (int) $this->config->getAppValue('updatenotification', 'update_check_errors', 0);
-			$this->config->setAppValue('updatenotification', 'update_check_errors', $errors);
+			$errors = 1 + (int) $this->config->getAppValue('updatenotification', 'update_check_errors', '0');
+			$this->config->setAppValue('updatenotification', 'update_check_errors', (string)$errors);
 
 			if (\in_array($errors, $this->connectionNotifications, true)) {
 				$this->sendErrorNotifications($errors);
 			}
 		} elseif (\is_array($status)) {
-			$this->config->setAppValue('updatenotification', 'update_check_errors', 0);
+			$this->config->setAppValue('updatenotification', 'update_check_errors', '0');
 			$this->clearErrorNotifications();
 
 			if (isset($status['version'])) {

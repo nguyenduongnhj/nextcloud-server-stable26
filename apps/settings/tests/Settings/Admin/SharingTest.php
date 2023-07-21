@@ -32,11 +32,13 @@
 namespace OCA\Settings\Tests\Settings\Admin;
 
 use OCA\Settings\Settings\Admin\Sharing;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\Constants;
 use OCP\IConfig;
 use OCP\IL10N;
 use OCP\Share\IManager;
+use PHPUnit\Framework\MockObject\MockObject;
 use Test\TestCase;
 
 class SharingTest extends TestCase {
@@ -44,10 +46,12 @@ class SharingTest extends TestCase {
 	private $admin;
 	/** @var IConfig */
 	private $config;
-	/** @var  IL10N|\PHPUnit\Framework\MockObject\MockObject */
+	/** @var  IL10N|MockObject */
 	private $l10n;
-	/** @var  IManager|\PHPUnit\Framework\MockObject\MockObject */
+	/** @var  IManager|MockObject */
 	private $shareManager;
+	/** @var IAppManager|MockObject */
+	private $appManager;
 
 	protected function setUp(): void {
 		parent::setUp();
@@ -55,19 +59,22 @@ class SharingTest extends TestCase {
 		$this->l10n = $this->getMockBuilder(IL10N::class)->getMock();
 
 		$this->shareManager = $this->getMockBuilder(IManager::class)->getMock();
+		$this->appManager = $this->getMockBuilder(IAppManager::class)->getMock();
 
 		$this->admin = new Sharing(
 			$this->config,
 			$this->l10n,
-			$this->shareManager
+			$this->shareManager,
+			$this->appManager
 		);
 	}
 
-	public function testGetFormWithoutExcludedGroups() {
+	public function testGetFormWithoutExcludedGroups(): void {
 		$this->config
 			->method('getAppValue')
 			->willReturnMap([
 				['core', 'shareapi_exclude_groups_list', '', ''],
+				['core', 'shareapi_allow_links_exclude_groups', '', ''],
 				['core', 'shareapi_allow_group_sharing', 'yes', 'yes'],
 				['core', 'shareapi_allow_links', 'yes', 'yes'],
 				['core', 'shareapi_allow_public_upload', 'yes', 'yes'],
@@ -76,6 +83,9 @@ class SharingTest extends TestCase {
 				['core', 'shareapi_restrict_user_enumeration_to_group', 'no', 'no'],
 				['core', 'shareapi_restrict_user_enumeration_to_phone', 'no', 'no'],
 				['core', 'shareapi_restrict_user_enumeration_full_match', 'yes', 'yes'],
+				['core', 'shareapi_restrict_user_enumeration_full_match_userid', 'yes', 'yes'],
+				['core', 'shareapi_restrict_user_enumeration_full_match_email', 'yes', 'yes'],
+				['core', 'shareapi_restrict_user_enumeration_full_match_ignore_second_dn', 'no', 'no'],
 				['core', 'shareapi_enabled', 'yes', 'yes'],
 				['core', 'shareapi_default_expire_date', 'no', 'no'],
 				['core', 'shareapi_expire_after_n_days', '7', '7'],
@@ -83,21 +93,25 @@ class SharingTest extends TestCase {
 				['core', 'shareapi_exclude_groups', 'no', 'no'],
 				['core', 'shareapi_public_link_disclaimertext', null, 'Lorem ipsum'],
 				['core', 'shareapi_enable_link_password_by_default', 'no', 'yes'],
-				['core', 'shareapi_default_permissions', Constants::PERMISSION_ALL, Constants::PERMISSION_ALL],
+				['core', 'shareapi_default_permissions', (string)Constants::PERMISSION_ALL, Constants::PERMISSION_ALL],
 				['core', 'shareapi_default_internal_expire_date', 'no', 'no'],
 				['core', 'shareapi_internal_expire_after_n_days', '7', '7'],
 				['core', 'shareapi_enforce_internal_expire_date', 'no', 'no'],
 				['core', 'shareapi_default_remote_expire_date', 'no', 'no'],
 				['core', 'shareapi_remote_expire_after_n_days', '7', '7'],
 				['core', 'shareapi_enforce_remote_expire_date', 'no', 'no'],
+				['core', 'shareapi_enforce_links_password_excluded_groups', '', ''],
 			]);
 		$this->shareManager->method('shareWithGroupMembersOnly')
 			->willReturn(false);
+
+		$this->appManager->method('isEnabledForUser')->with('files_sharing')->willReturn(false);
 
 		$expected = new TemplateResponse(
 			'settings',
 			'settings/admin/sharing',
 			[
+				'sharingAppEnabled' => false,
 				'allowGroupSharing' => 'yes',
 				'allowLinks' => 'yes',
 				'allowPublicUpload' => 'yes',
@@ -106,6 +120,9 @@ class SharingTest extends TestCase {
 				'restrictUserEnumerationToGroup' => 'no',
 				'restrictUserEnumerationToPhone' => 'no',
 				'restrictUserEnumerationFullMatch' => 'yes',
+				'restrictUserEnumerationFullMatchUserId' => 'yes',
+				'restrictUserEnumerationFullMatchEmail' => 'yes',
+				'restrictUserEnumerationFullMatchIgnoreSecondDN' => 'no',
 				'enforceLinkPassword' => false,
 				'onlyShareWithGroupMembers' => false,
 				'shareAPIEnabled' => 'yes',
@@ -117,7 +134,7 @@ class SharingTest extends TestCase {
 				'publicShareDisclaimerText' => 'Lorem ipsum',
 				'enableLinkPasswordByDefault' => 'yes',
 				'shareApiDefaultPermissions' => Constants::PERMISSION_ALL,
-				'shareApiDefaultPermissionsCheckboxes' => $this->invokePrivate($this->admin, 'getSharePermissionList', []),
+				'shareApiDefaultPermissionsCheckboxes' => self::invokePrivate($this->admin, 'getSharePermissionList', []),
 				'shareDefaultInternalExpireDateSet' => 'no',
 				'shareInternalExpireAfterNDays' => '7',
 				'shareInternalEnforceExpireDate' => 'no',
@@ -125,6 +142,8 @@ class SharingTest extends TestCase {
 				'shareRemoteExpireAfterNDays' => '7',
 				'shareRemoteEnforceExpireDate' => 'no',
 				'allowLinksExcludeGroups' => '',
+				'passwordExcludedGroups' => '',
+				'passwordExcludedGroupsFeatureEnabled' => false,
 			],
 			''
 		);
@@ -132,11 +151,12 @@ class SharingTest extends TestCase {
 		$this->assertEquals($expected, $this->admin->getForm());
 	}
 
-	public function testGetFormWithExcludedGroups() {
+	public function testGetFormWithExcludedGroups(): void {
 		$this->config
 			->method('getAppValue')
 			->willReturnMap([
 				['core', 'shareapi_exclude_groups_list', '', '["NoSharers","OtherNoSharers"]'],
+				['core', 'shareapi_allow_links_exclude_groups', '', ''],
 				['core', 'shareapi_allow_group_sharing', 'yes', 'yes'],
 				['core', 'shareapi_allow_links', 'yes', 'yes'],
 				['core', 'shareapi_allow_public_upload', 'yes', 'yes'],
@@ -145,6 +165,9 @@ class SharingTest extends TestCase {
 				['core', 'shareapi_restrict_user_enumeration_to_group', 'no', 'no'],
 				['core', 'shareapi_restrict_user_enumeration_to_phone', 'no', 'no'],
 				['core', 'shareapi_restrict_user_enumeration_full_match', 'yes', 'yes'],
+				['core', 'shareapi_restrict_user_enumeration_full_match_userid', 'yes', 'yes'],
+				['core', 'shareapi_restrict_user_enumeration_full_match_email', 'yes', 'yes'],
+				['core', 'shareapi_restrict_user_enumeration_full_match_ignore_second_dn', 'no', 'no'],
 				['core', 'shareapi_enabled', 'yes', 'yes'],
 				['core', 'shareapi_default_expire_date', 'no', 'no'],
 				['core', 'shareapi_expire_after_n_days', '7', '7'],
@@ -152,21 +175,25 @@ class SharingTest extends TestCase {
 				['core', 'shareapi_exclude_groups', 'no', 'yes'],
 				['core', 'shareapi_public_link_disclaimertext', null, 'Lorem ipsum'],
 				['core', 'shareapi_enable_link_password_by_default', 'no', 'yes'],
-				['core', 'shareapi_default_permissions', Constants::PERMISSION_ALL, Constants::PERMISSION_ALL],
+				['core', 'shareapi_default_permissions', (string)Constants::PERMISSION_ALL, Constants::PERMISSION_ALL],
 				['core', 'shareapi_default_internal_expire_date', 'no', 'no'],
 				['core', 'shareapi_internal_expire_after_n_days', '7', '7'],
 				['core', 'shareapi_enforce_internal_expire_date', 'no', 'no'],
 				['core', 'shareapi_default_remote_expire_date', 'no', 'no'],
 				['core', 'shareapi_remote_expire_after_n_days', '7', '7'],
 				['core', 'shareapi_enforce_remote_expire_date', 'no', 'no'],
+				['core', 'shareapi_enforce_links_password_excluded_groups', '', ''],
 			]);
 		$this->shareManager->method('shareWithGroupMembersOnly')
 			->willReturn(false);
+
+		$this->appManager->method('isEnabledForUser')->with('files_sharing')->willReturn(true);
 
 		$expected = new TemplateResponse(
 			'settings',
 			'settings/admin/sharing',
 			[
+				'sharingAppEnabled' => true,
 				'allowGroupSharing' => 'yes',
 				'allowLinks' => 'yes',
 				'allowPublicUpload' => 'yes',
@@ -175,6 +202,9 @@ class SharingTest extends TestCase {
 				'restrictUserEnumerationToGroup' => 'no',
 				'restrictUserEnumerationToPhone' => 'no',
 				'restrictUserEnumerationFullMatch' => 'yes',
+				'restrictUserEnumerationFullMatchUserId' => 'yes',
+				'restrictUserEnumerationFullMatchEmail' => 'yes',
+				'restrictUserEnumerationFullMatchIgnoreSecondDN' => 'no',
 				'enforceLinkPassword' => false,
 				'onlyShareWithGroupMembers' => false,
 				'shareAPIEnabled' => 'yes',
@@ -186,7 +216,7 @@ class SharingTest extends TestCase {
 				'publicShareDisclaimerText' => 'Lorem ipsum',
 				'enableLinkPasswordByDefault' => 'yes',
 				'shareApiDefaultPermissions' => Constants::PERMISSION_ALL,
-				'shareApiDefaultPermissionsCheckboxes' => $this->invokePrivate($this->admin, 'getSharePermissionList', []),
+				'shareApiDefaultPermissionsCheckboxes' => self::invokePrivate($this->admin, 'getSharePermissionList', []),
 				'shareDefaultInternalExpireDateSet' => 'no',
 				'shareInternalExpireAfterNDays' => '7',
 				'shareInternalEnforceExpireDate' => 'no',
@@ -194,6 +224,8 @@ class SharingTest extends TestCase {
 				'shareRemoteExpireAfterNDays' => '7',
 				'shareRemoteEnforceExpireDate' => 'no',
 				'allowLinksExcludeGroups' => '',
+				'passwordExcludedGroups' => '',
+				'passwordExcludedGroupsFeatureEnabled' => false,
 			],
 			''
 		);
@@ -201,11 +233,11 @@ class SharingTest extends TestCase {
 		$this->assertEquals($expected, $this->admin->getForm());
 	}
 
-	public function testGetSection() {
+	public function testGetSection(): void {
 		$this->assertSame('sharing', $this->admin->getSection());
 	}
 
-	public function testGetPriority() {
+	public function testGetPriority(): void {
 		$this->assertSame(0, $this->admin->getPriority());
 	}
 }

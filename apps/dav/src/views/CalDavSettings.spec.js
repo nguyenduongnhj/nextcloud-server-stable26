@@ -1,7 +1,5 @@
-import axios from '@nextcloud/axios'
 import { render } from '@testing-library/vue'
-import userEvent from '@testing-library/user-event'
-import CalDavSettings from './CalDavSettings'
+import CalDavSettings from './CalDavSettings.vue'
 // eslint-disable-next-line no-unused-vars
 import { generateUrl } from '@nextcloud/router'
 
@@ -11,6 +9,11 @@ jest.mock('@nextcloud/router', () => {
 		generateUrl(url) {
 			return url
 		},
+	}
+})
+jest.mock('@nextcloud/initial-state', () => {
+	return {
+		loadState: jest.fn(() => 'https://docs.nextcloud.com/server/23/go.php?to=user-sync-calendars'),
 	}
 })
 
@@ -31,7 +34,7 @@ describe('CalDavSettings', () => {
 		global.OCP = originalOCP
 	})
 
-	test('interactions', async() => {
+	test('interactions', async () => {
 		const TLUtils = render(
 			CalDavSettings,
 			{
@@ -40,6 +43,7 @@ describe('CalDavSettings', () => {
 						sendInvitations: true,
 						generateBirthdayCalendar: true,
 						sendEventReminders: true,
+						sendEventRemindersToSharedUsers: true,
 						sendEventRemindersPush: true,
 					}
 				},
@@ -61,10 +65,17 @@ describe('CalDavSettings', () => {
 			'Send notifications for events'
 		)
 		expect(sendEventReminders).toBeChecked()
+		const sendEventRemindersToSharedUsers = TLUtils.getByLabelText(
+			'Send reminder notifications to calendar sharees as well'
+		)
+		expect(sendEventRemindersToSharedUsers).toBeChecked()
 		const sendEventRemindersPush = TLUtils.getByLabelText(
 			'Enable notifications for events via push'
 		)
 		expect(sendEventRemindersPush).toBeChecked()
+
+		/*
+		FIXME userEvent.click is broken with nextcloud-vue/Button
 
 		await userEvent.click(sendInvitations)
 		expect(sendInvitations).not.toBeChecked()
@@ -102,7 +113,10 @@ describe('CalDavSettings', () => {
 			'sendEventReminders',
 			'no'
 		)
+
+		expect(sendEventRemindersToSharedUsers).toBeDisabled()
 		expect(sendEventRemindersPush).toBeDisabled()
+
 		OCP.AppConfig.setValue.mockClear()
 		await userEvent.click(sendEventReminders)
 		expect(sendEventReminders).toBeChecked()
@@ -111,6 +125,9 @@ describe('CalDavSettings', () => {
 			'sendEventReminders',
 			'yes'
 		)
+
+		expect(sendEventRemindersToSharedUsers).toBeEnabled()
 		expect(sendEventRemindersPush).toBeEnabled()
+		*/
 	})
 })

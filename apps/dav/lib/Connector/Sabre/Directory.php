@@ -34,53 +34,46 @@ namespace OCA\DAV\Connector\Sabre;
 
 use OC\Files\Mount\MoveableMount;
 use OC\Files\View;
+use OC\Metadata\FileMetadata;
 use OCA\DAV\Connector\Sabre\Exception\FileLocked;
 use OCA\DAV\Connector\Sabre\Exception\Forbidden;
 use OCA\DAV\Connector\Sabre\Exception\InvalidPath;
+use OCA\DAV\Upload\FutureFile;
 use OCP\Files\FileInfo;
+use OCP\Files\Folder;
 use OCP\Files\ForbiddenException;
 use OCP\Files\InvalidPathException;
 use OCP\Files\NotPermittedException;
 use OCP\Files\StorageNotAvailableException;
 use OCP\Lock\ILockingProvider;
 use OCP\Lock\LockedException;
+use Psr\Log\LoggerInterface;
 use Sabre\DAV\Exception\BadRequest;
 use Sabre\DAV\Exception\Locked;
 use Sabre\DAV\Exception\NotFound;
 use Sabre\DAV\Exception\ServiceUnavailable;
 use Sabre\DAV\IFile;
 use Sabre\DAV\INode;
+use OCP\Share\IManager as IShareManager;
 
 class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICollection, \Sabre\DAV\IQuota, \Sabre\DAV\IMoveTarget, \Sabre\DAV\ICopyTarget {
-
 	/**
 	 * Cached directory content
-	 *
 	 * @var \OCP\Files\FileInfo[]
 	 */
-	private $dirContent;
+	private ?array $dirContent = null;
 
-	/**
-	 * Cached quota info
-	 *
-	 * @var array
-	 */
-	private $quotaInfo;
+	/** Cached quota info */
+	private ?array $quotaInfo = null;
+	private ?CachingTree $tree = null;
 
-	/**
-	 * @var ObjectTree|null
-	 */
-	private $tree;
+	/** @var array<string, array<int, FileMetadata>> */
+	private array $metadata = [];
 
 	/**
 	 * Sets up the node, expects a full path name
-	 *
-	 * @param \OC\Files\View $view
-	 * @param \OCP\Files\FileInfo $info
-	 * @param ObjectTree|null $tree
-	 * @param \OCP\Share\IManager $shareManager
 	 */
-	public function __construct(View $view, FileInfo $info, $tree = null, $shareManager = null) {
+	public function __construct(View $view, FileInfo $info, ?CachingTree $tree = null, IShareManager $shareManager = null) {
 		parent::__construct($view, $info, $shareManager);
 		$this->tree = $tree;
 	}
@@ -122,7 +115,6 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 			// for chunked upload also updating a existing file is a "createFile"
 			// because we create all the chunks before re-assemble them to the existing file.
 			if (isset($_SERVER['HTTP_OC_CHUNKED'])) {
-
 				// exit if we can't create a new file and we don't updatable existing file
 				$chunkInfo = \OC_FileChunking::decodeName($name);
 				if (!$this->fileView->isCreatable($this->path) &&
@@ -144,7 +136,9 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 			$info = $this->fileView->getFileInfo($this->path . '/' . $name);
 			if (!$info) {
 				// use a dummy FileInfo which is acceptable here since it will be refreshed after the put is complete
-				$info = new \OC\Files\FileInfo($path, null, null, [], null);
+				$info = new \OC\Files\FileInfo($path, null, null, [
+					'type' => FileInfo::TYPE_FILE
+				], null);
 			}
 			$node = new \OCA\DAV\Connector\Sabre\File($this->fileView, $info);
 
@@ -233,7 +227,7 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 			throw new \Sabre\DAV\Exception\NotFound('File with name ' . $path . ' could not be located');
 		}
 
-		if ($info['mimetype'] === 'httpd/unix-directory') {
+		if ($info->getMimeType() === FileInfo::MIMETYPE_FOLDER) {
 			$node = new \OCA\DAV\Connector\Sabre\Directory($this->fileView, $info, $this->tree, $this->shareManager);
 		} else {
 			$node = new \OCA\DAV\Connector\Sabre\File($this->fileView, $info, $this->shareManager);
@@ -259,9 +253,13 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 			if (!$this->info->isReadable()) {
 				// return 403 instead of 404 because a 404 would make
 				// the caller believe that the collection itself does not exist
-				throw new Forbidden('No read permissions');
+				if (\OCP\Server::get(\OCP\App\IAppManager::class)->isInstalled('files_accesscontrol')) {
+					throw new Forbidden('No read permissions. This might be caused by files_accesscontrol, check your configured rules');
+				} else {
+					throw new Forbidden('No read permissions');
+				}
 			}
-			$folderContent = $this->fileView->getDirectoryContent($this->path);
+			$folderContent = $this->getNode()->getDirectoryListing();
 		} catch (LockedException $e) {
 			throw new Locked();
 		}
@@ -323,12 +321,19 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 	 * @return array
 	 */
 	public function getQuotaInfo() {
+		/** @var LoggerInterface $logger */
+		$logger = \OC::$server->get(LoggerInterface::class);
 		if ($this->quotaInfo) {
 			return $this->quotaInfo;
 		}
+		$relativePath = $this->fileView->getRelativePath($this->info->getPath());
+		if ($relativePath === null) {
+			$logger->warning("error while getting quota as the relative path cannot be found");
+			return [0, 0];
+		}
+
 		try {
-			$info = $this->fileView->getFileInfo($this->path, false);
-			$storageInfo = \OC_Helper::getStorageInfo($this->info->getPath(), $info);
+			$storageInfo = \OC_Helper::getStorageInfo($relativePath, $this->info, false);
 			if ($storageInfo['quota'] === \OCP\Files\FileInfo::SPACE_UNLIMITED) {
 				$free = \OCP\Files\FileInfo::SPACE_UNLIMITED;
 			} else {
@@ -340,10 +345,13 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 			];
 			return $this->quotaInfo;
 		} catch (\OCP\Files\NotFoundException $e) {
+			$logger->warning("error while getting quota into", ['exception' => $e]);
 			return [0, 0];
 		} catch (\OCP\Files\StorageNotAvailableException $e) {
+			$logger->warning("error while getting quota into", ['exception' => $e]);
 			return [0, 0];
 		} catch (NotPermittedException $e) {
+			$logger->warning("error while getting quota into", ['exception' => $e]);
 			return [0, 0];
 		}
 	}
@@ -474,5 +482,9 @@ class Directory extends \OCA\DAV\Connector\Sabre\Node implements \Sabre\DAV\ICol
 		}
 
 		return false;
+	}
+
+	public function getNode(): Folder {
+		return $this->node;
 	}
 }

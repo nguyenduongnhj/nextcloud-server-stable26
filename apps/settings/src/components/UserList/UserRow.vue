@@ -28,8 +28,7 @@
 		<div :class="{'icon-loading-small': loading.delete || loading.disable || loading.wipe}"
 			class="avatar">
 			<img v-if="!loading.delete && !loading.disable && !loading.wipe"
-				:src="generateAvatar(user.id, 32)"
-				:srcset="generateAvatar(user.id, 64)+' 2x, '+generateAvatar(user.id, 128)+' 4x'"
+				:src="generateAvatar(user.id, isDarkTheme)"
 				alt=""
 				height="32"
 				width="32">
@@ -43,22 +42,20 @@
 	</div>
 
 	<!-- User full data -->
-	<UserRowSimple
-		v-else-if="!editing"
+	<UserRowSimple v-else-if="!editing"
 		:editing.sync="editing"
 		:feedback-message="feedbackMessage"
 		:groups="groups"
 		:languages="languages"
 		:loading="loading"
-		:opened-menu="openedMenu"
+		:opened-menu.sync="openedMenu"
 		:settings="settings"
 		:show-config="showConfig"
 		:sub-admins-groups="subAdminsGroups"
 		:user-actions="userActions"
 		:user="user"
-		:class="{'row--menu-opened': openedMenu}"
-		@hideMenu="hideMenu"
-		@toggleMenu="toggleMenu" />
+		:is-dark-theme="isDarkTheme"
+		:class="{'row--menu-opened': openedMenu}" />
 	<div v-else
 		:class="{
 			'disabled': loading.delete || loading.disable,
@@ -69,20 +66,18 @@
 		<div :class="{'icon-loading-small': loading.delete || loading.disable || loading.wipe}"
 			class="avatar">
 			<img v-if="!loading.delete && !loading.disable && !loading.wipe"
-				:src="generateAvatar(user.id, 32)"
-				:srcset="generateAvatar(user.id, 64)+' 2x, '+generateAvatar(user.id, 128)+' 4x'"
+				:src="generateAvatar(user.id, isDarkTheme)"
 				alt=""
 				height="32"
 				width="32">
 		</div>
 		<!-- dirty hack to ellipsis on two lines -->
 		<div v-if="user.backendCapabilities.setDisplayName" class="displayName">
-			<form
-				:class="{'icon-loading-small': loading.displayName}"
+			<form :class="{'icon-loading-small': loading.displayName}"
 				class="displayName"
 				@submit.prevent="updateDisplayName">
-				<input
-					:id="'displayName'+user.id+rand"
+				<label class="hidden-visually" :for="'displayName'+user.id+rand">{{ t('settings', 'Edit display name') }}</label>
+				<input :id="'displayName'+user.id+rand"
 					ref="displayName"
 					:disabled="loading.displayName||loading.all"
 					:value="user.displayname"
@@ -91,8 +86,7 @@
 					autocorrect="off"
 					spellcheck="false"
 					type="text">
-				<input
-					class="icon-confirm"
+				<input class="icon-confirm"
 					type="submit"
 					value="">
 			</form>
@@ -100,7 +94,7 @@
 		<div v-else class="name">
 			{{ user.id }}
 			<div class="displayName subtitle">
-				<div v-tooltip="user.displayname.length > 20 ? user.displayname : ''" class="cellText">
+				<div :title="user.displayname.length > 20 ? user.displayname : ''" class="cellText">
 					{{ user.displayname }}
 				</div>
 			</div>
@@ -109,10 +103,12 @@
 			:class="{'icon-loading-small': loading.password}"
 			class="password"
 			@submit.prevent="updatePassword">
+			<label class="hidden-visually" :for="'password'+user.id+rand">{{ t('settings', 'Add new password') }}</label>
 			<input :id="'password'+user.id+rand"
 				ref="password"
 				:disabled="loading.password || loading.all"
 				:minlength="minPasswordLength"
+				maxlength="469"
 				:placeholder="t('settings', 'Add new password')"
 				autocapitalize="off"
 				autocomplete="new-password"
@@ -127,6 +123,7 @@
 		<form :class="{'icon-loading-small': loading.mailAddress}"
 			class="mailAddress"
 			@submit.prevent="updateEmail">
+			<label class="hidden-visually" :for="'mailAddress'+user.id+rand">{{ t('settings', 'Add new email address') }}</label>
 			<input :id="'mailAddress'+user.id+rand"
 				ref="mailAddress"
 				:disabled="loading.mailAddress||loading.all"
@@ -140,7 +137,9 @@
 			<input class="icon-confirm" type="submit" value="">
 		</form>
 		<div :class="{'icon-loading-small': loading.groups}" class="groups">
-			<Multiselect :close-on-select="false"
+			<label class="hidden-visually" :for="'groups'+user.id+rand">{{ t('settings', 'Add user to group') }}</label>
+			<NcMultiselect :id="'groups'+user.id+rand"
+				:close-on-select="false"
 				:disabled="loading.groups||loading.all"
 				:limit="2"
 				:multiple="true"
@@ -157,12 +156,14 @@
 				@select="addUserGroup"
 				@tag="createGroup">
 				<span slot="noResult">{{ t('settings', 'No results') }}</span>
-			</Multiselect>
+			</NcMultiselect>
 		</div>
 		<div v-if="subAdminsGroups.length>0 && settings.isAdmin"
 			:class="{'icon-loading-small': loading.subadmins}"
 			class="subadmins">
-			<Multiselect :close-on-select="false"
+			<label class="hidden-visually" :for="'subadmins'+user.id+rand">{{ t('settings', 'Set user as admin for') }}</label>
+			<NcMultiselect :id="'subadmins'+user.id+rand"
+				:close-on-select="false"
 				:disabled="loading.subadmins||loading.all"
 				:limit="2"
 				:multiple="true"
@@ -176,12 +177,14 @@
 				@remove="removeUserSubAdmin"
 				@select="addUserSubAdmin">
 				<span slot="noResult">{{ t('settings', 'No results') }}</span>
-			</Multiselect>
+			</NcMultiselect>
 		</div>
-		<div v-tooltip.auto="usedSpace"
+		<div :title="usedSpace"
 			:class="{'icon-loading-small': loading.quota}"
 			class="quota">
-			<Multiselect :allow-empty="false"
+			<label class="hidden-visually" :for="'quota'+user.id+rand">{{ t('settings', 'Select user quota') }}</label>
+			<NcMultiselect :id="'quota'+user.id+rand"
+				:allow-empty="false"
 				:disabled="loading.quota||loading.all"
 				:options="quotaOptions"
 				:placeholder="t('settings', 'Select user quota')"
@@ -197,7 +200,9 @@
 		<div v-if="showConfig.showLanguages"
 			:class="{'icon-loading-small': loading.languages}"
 			class="languages">
-			<Multiselect :allow-empty="false"
+			<label class="hidden-visually" :for="'language'+user.id+rand">{{ t('settings', 'Set the language') }}</label>
+			<NcMultiselect :id="'language'+user.id+rand"
+				:allow-empty="false"
 				:disabled="loading.languages||loading.all"
 				:options="languages"
 				:placeholder="t('settings', 'No language set')"
@@ -209,6 +214,22 @@
 				track-by="code"
 				@input="setUserLanguage" />
 		</div>
+		<div :class="{'icon-loading-small': loading.manager}" class="managers">
+			<NcMultiselect ref="manager"
+				v-model="currentManager"
+				:close-on-select="true"
+				:user-select="true"
+				:options="possibleManagers"
+				:placeholder="t('settings', 'Select manager')"
+				class="multiselect-vue"
+				label="displayname"
+				track-by="id"
+				@search-change="searchUserManager"
+				@remove="updateUserManager"
+				@select="updateUserManager">
+				<span slot="noResult">{{ t('settings', 'No results') }}</span>
+			</NcMultiselect>
+		</div>
 
 		<!-- don't show this on edit mode -->
 		<div v-if="showConfig.showStoragePath || showConfig.showUserBackend"
@@ -218,17 +239,19 @@
 		<div class="userActions">
 			<div v-if="!loading.all"
 				class="toggleUserActions">
-				<Actions>
-					<ActionButton icon="icon-checkmark"
-						@click="editing = false">
-						{{ t('settings', 'Done') }}
-					</ActionButton>
-				</Actions>
+				<NcActions>
+					<NcActionButton icon="icon-checkmark"
+						:title="t('settings', 'Done')"
+						:aria-label="t('settings', 'Done')"
+						@click="editing = false" />
+				</NcActions>
 				<div v-click-outside="hideMenu" class="userPopoverMenuWrapper">
-					<div class="icon-more"
-						@click="toggleMenu" />
+					<button class="icon-more"
+						:aria-expanded="openedMenu"
+						:aria-label="t('settings', 'Toggle user actions menu')"
+						@click.prevent="toggleMenu" />
 					<div :class="{ 'open': openedMenu }" class="popovermenu">
-						<PopoverMenu :menu="userActions" />
+						<NcPopoverMenu :menu="userActions" />
 					</div>
 				</div>
 			</div>
@@ -243,33 +266,32 @@
 
 <script>
 import ClickOutside from 'vue-click-outside'
-import Vue from 'vue'
-import VTooltip from 'v-tooltip'
-import {
-	PopoverMenu,
-	Multiselect,
-	Actions,
-	ActionButton,
-} from '@nextcloud/vue'
-import UserRowSimple from './UserRowSimple'
-import UserRowMixin from '../../mixins/UserRowMixin'
 
-Vue.use(VTooltip)
+import NcPopoverMenu from '@nextcloud/vue/dist/Components/NcPopoverMenu.js'
+import NcMultiselect from '@nextcloud/vue/dist/Components/NcMultiselect.js'
+import NcActions from '@nextcloud/vue/dist/Components/NcActions.js'
+import NcActionButton from '@nextcloud/vue/dist/Components/NcActionButton.js'
+import UserRowSimple from './UserRowSimple.vue'
+import UserRowMixin from '../../mixins/UserRowMixin.js'
 
 export default {
 	name: 'UserRow',
 	components: {
 		UserRowSimple,
-		PopoverMenu,
-		Actions,
-		ActionButton,
-		Multiselect,
+		NcPopoverMenu,
+		NcActions,
+		NcActionButton,
+		NcMultiselect,
 	},
 	directives: {
 		ClickOutside,
 	},
 	mixins: [UserRowMixin],
 	props: {
+		users: {
+			type: Array,
+			required: true,
+		},
 		user: {
 			type: Object,
 			required: true,
@@ -302,12 +324,18 @@ export default {
 			type: Array,
 			default: () => [],
 		},
+		isDarkTheme: {
+			type: Boolean,
+			required: true,
+		},
 	},
 	data() {
 		return {
 			rand: parseInt(Math.random() * 1000),
 			openedMenu: false,
 			feedbackMessage: '',
+			possibleManagers: [],
+			currentManager: '',
 			editing: false,
 			loading: {
 				all: false,
@@ -321,10 +349,12 @@ export default {
 				disable: false,
 				languages: false,
 				wipe: false,
+				manager: false,
 			},
 		}
 	},
 	computed: {
+
 		/* USER POPOVERMENU ACTIONS */
 		userActions() {
 			const actions = [
@@ -353,6 +383,12 @@ export default {
 			}
 			return actions.concat(this.externalActions)
 		},
+	},
+	async beforeMount() {
+		await this.searchUserManager()
+		if (this.user.manager) {
+			await this.initManager(this.user.manager)
+		}
 	},
 
 	methods: {
@@ -388,6 +424,34 @@ export default {
 				},
 				true
 			)
+		},
+
+		filterManagers(managers) {
+			return managers.filter((manager) => manager.id !== this.user.id)
+		},
+		async initManager(userId) {
+			await this.$store.dispatch('getUser', userId).then(response => {
+				this.currentManager = response?.data.ocs.data
+			})
+		},
+		async searchUserManager(query) {
+			await this.$store.dispatch('searchUsers', { offset: 0, limit: 10, search: query }).then(response => {
+				const users = response?.data ? this.filterManagers(Object.values(response?.data.ocs.data.users)) : []
+				if (users.length > 0) {
+					this.possibleManagers = users
+				}
+			})
+		},
+
+		updateUserManager(manager) {
+			this.loading.manager = true
+			this.$store.dispatch('setUserData', {
+				userid: this.user.id,
+				key: 'manager',
+				value: this.currentManager ? this.currentManager.id : '',
+			}).then(() => {
+				this.loading.manager = false
+			})
 		},
 
 		deleteUser() {
@@ -432,10 +496,10 @@ export default {
 		},
 
 		/**
-			 * Set user displayName
-			 *
-			 * @param {string} displayName The display name
-			 */
+		 * Set user displayName
+		 *
+		 * @param {string} displayName The display name
+		 */
 		updateDisplayName() {
 			const displayName = this.$refs.displayName.value
 			this.loading.displayName = true
@@ -450,10 +514,10 @@ export default {
 		},
 
 		/**
-			 * Set user password
-			 *
-			 * @param {string} password The email adress
-			 */
+		 * Set user password
+		 *
+		 * @param {string} password The email address
+		 */
 		updatePassword() {
 			const password = this.$refs.password.value
 			this.loading.password = true
@@ -468,10 +532,10 @@ export default {
 		},
 
 		/**
-			 * Set user mailAddress
-			 *
-			 * @param {string} mailAddress The email adress
-			 */
+		 * Set user mailAddress
+		 *
+		 * @param {string} mailAddress The email address
+		 */
 		updateEmail() {
 			const mailAddress = this.$refs.mailAddress.value
 			this.loading.mailAddress = true
@@ -486,10 +550,10 @@ export default {
 		},
 
 		/**
-			 * Create a new group and add user to it
-			 *
-			 * @param {string} gid Group id
-			 */
+		 * Create a new group and add user to it
+		 *
+		 * @param {string} gid Group id
+		 */
 		async createGroup(gid) {
 			this.loading = { groups: true, subadmins: true }
 			try {
@@ -505,10 +569,10 @@ export default {
 		},
 
 		/**
-			 * Add user to group
-			 *
-			 * @param {object} group Group object
-			 */
+		 * Add user to group
+		 *
+		 * @param {object} group Group object
+		 */
 		async addUserGroup(group) {
 			if (group.canAdd === false) {
 				return false
@@ -526,10 +590,10 @@ export default {
 		},
 
 		/**
-			 * Remove user from group
-			 *
-			 * @param {object} group Group object
-			 */
+		 * Remove user from group
+		 *
+		 * @param {object} group Group object
+		 */
 		async removeUserGroup(group) {
 			if (group.canRemove === false) {
 				return false
@@ -555,10 +619,10 @@ export default {
 		},
 
 		/**
-			 * Add user to group
-			 *
-			 * @param {object} group Group object
-			 */
+		 * Add user to group
+		 *
+		 * @param {object} group Group object
+		 */
 		async addUserSubAdmin(group) {
 			this.loading.subadmins = true
 			const userid = this.user.id
@@ -576,10 +640,10 @@ export default {
 		},
 
 		/**
-			 * Remove user from group
-			 *
-			 * @param {object} group Group object
-			 */
+		 * Remove user from group
+		 *
+		 * @param {object} group Group object
+		 */
 		async removeUserSubAdmin(group) {
 			this.loading.subadmins = true
 			const userid = this.user.id
@@ -598,11 +662,11 @@ export default {
 		},
 
 		/**
-			 * Dispatch quota set request
-			 *
-			 * @param {string|Object} quota Quota in readable format '5 GB' or Object {id: '5 GB', label: '5GB'}
-			 * @returns {string}
-			 */
+		 * Dispatch quota set request
+		 *
+		 * @param {string | object} quota Quota in readable format '5 GB' or Object {id: '5 GB', label: '5GB'}
+		 * @return {string}
+		 */
 		async setUserQuota(quota = 'none') {
 			this.loading.quota = true
 			// ensure we only send the preset id
@@ -623,11 +687,11 @@ export default {
 		},
 
 		/**
-			 * Validate quota string to make sure it's a valid human file size
-			 *
-			 * @param {string} quota Quota in readable format '5 GB'
-			 * @returns {Promise|boolean}
-			 */
+		 * Validate quota string to make sure it's a valid human file size
+		 *
+		 * @param {string} quota Quota in readable format '5 GB'
+		 * @return {Promise|boolean}
+		 */
 		validateQuota(quota) {
 			// only used for new presets sent through @Tag
 			const validQuota = OC.Util.computerFileSize(quota)
@@ -640,11 +704,11 @@ export default {
 		},
 
 		/**
-			 * Dispatch language set request
-			 *
-			 * @param {Object} lang language object {code:'en', name:'English'}
-			 * @returns {Object}
-			 */
+		 * Dispatch language set request
+		 *
+		 * @param {object} lang language object {code:'en', name:'English'}
+		 * @return {object}
+		 */
 		async setUserLanguage(lang) {
 			this.loading.languages = true
 			// ensure we only send the preset id
@@ -663,8 +727,8 @@ export default {
 		},
 
 		/**
-			 * Dispatch new welcome mail request
-			 */
+		 * Dispatch new welcome mail request
+		 */
 		sendWelcomeMail() {
 			this.loading.all = true
 			this.$store.dispatch('sendWelcomeMail', this.user.id)

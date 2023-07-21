@@ -55,15 +55,9 @@ OC.L10N.register(
     "Office documents" : "Documentos de oficina",
     "PDF documents" : "Documentos PDF",
     "Custom mimetype" : "Mimetipe personalizado",
-    "Select a tag" : "Seleccione unha etiqueta",
-    "No results" : "Sen resultados",
-    "%s (invisible)" : "%s (invisíbel)",
-    "%s (restricted)" : "%s (restrinxido)",
     "Please enter a valid time span" : "Introduza un intervalo de tempo válido",
     "Select a request URL" : "Seleccione un URL de solicitude",
-    "Predefined URLs" : "URL predefinidos",
     "Files WebDAV" : "Ficheiros WebDAV",
-    "Others" : "Outros",
     "Custom URL" : "URL personalizado",
     "Select a user agent" : "Seleccionar un axente de usuario",
     "Android client" : "Cliente Android",
@@ -83,6 +77,7 @@ OC.L10N.register(
     "Available flows" : "Fluxos dispoñíbeis",
     "For details on how to write your own flow, check out the development documentation." : "Para obter máis detalles sobre como escribir o seu propio fluxo, consulte a documentación de desenvolvemento.",
     "More flows" : "Máis fluxos",
+    "Browse the App Store" : "Navega pola Tenda de Aplicacións",
     "Show less" : "Amosar menos",
     "Show more" : "Amosar máis",
     "Configured flows" : "Fluxos configurados",
@@ -114,6 +109,7 @@ OC.L10N.register(
     "User group membership" : "Pertencia a un grupo de usuarios",
     "is member of" : "é membro de",
     "is not member of" : "non é membro de",
-    "Browse the app store" : "Examinar a tenda de aplicacións"
+    "Predefined URLs" : "URL predefinidos",
+    "Others" : "Outros"
 },
 "nplurals=2; plural=(n != 1);");

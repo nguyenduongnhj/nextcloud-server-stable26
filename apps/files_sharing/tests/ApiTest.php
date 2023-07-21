@@ -54,7 +54,7 @@ use OCP\UserStatus\IManager as IUserStatusManager;
  * Class ApiTest
  *
  * @group DB
- * TODO: convert to real intergration tests
+ * TODO: convert to real integration tests
  */
 class ApiTest extends TestCase {
 	public const TEST_FOLDER_NAME = '/folder_share_api_test';
@@ -205,14 +205,16 @@ class ApiTest extends TestCase {
 		$ocs->cleanup();
 	}
 
+	/**
+	 * @group RoutingWeirdness
+	 */
 	public function testCreateShareLink() {
 		$ocs = $this->createOCS(self::TEST_FILES_SHARING_API_USER1);
 		$result = $ocs->createShare($this->folder, \OCP\Constants::PERMISSION_ALL, IShare::TYPE_LINK);
 		$ocs->cleanup();
 
 		$data = $result->getData();
-		$this->assertEquals(\OCP\Constants::PERMISSION_READ |
-			\OCP\Constants::PERMISSION_SHARE,
+		$this->assertEquals(\OCP\Constants::PERMISSION_ALL,
 			$data['permissions']);
 		$this->assertEmpty($data['expiration']);
 		$this->assertTrue(is_string($data['token']));
@@ -228,6 +230,9 @@ class ApiTest extends TestCase {
 		$ocs->cleanup();
 	}
 
+	/**
+	 * @group RoutingWeirdness
+	 */
 	public function testCreateShareLinkPublicUpload() {
 		$ocs = $this->createOCS(self::TEST_FILES_SHARING_API_USER1);
 		$result = $ocs->createShare($this->folder, \OCP\Constants::PERMISSION_ALL, IShare::TYPE_LINK, null, 'true');
@@ -383,6 +388,9 @@ class ApiTest extends TestCase {
 	}
 
 	public function testGetAllSharesWithMe() {
+		$this->loginAsUser(self::TEST_FILES_SHARING_API_USER2);
+		$this->logout();
+
 		$node1 = $this->userFolder->get($this->filename);
 		$share1 = $this->shareManager->newShare();
 		$share1->setNode($node1)
@@ -417,6 +425,7 @@ class ApiTest extends TestCase {
 
 	/**
 	 * @medium
+	 * @group RoutingWeirdness
 	 */
 	public function testPublicLinkUrl() {
 		$ocs = $this->createOCS(self::TEST_FILES_SHARING_API_USER1);
@@ -835,7 +844,7 @@ class ApiTest extends TestCase {
 
 		// $request = $this->createRequest(['path' => $this->subfolder]);
 		$ocs = $this->createOCS(self::TEST_FILES_SHARING_API_USER2);
-		$result1 = $ocs->getShares('false','false','false', $this->subfolder);
+		$result1 = $ocs->getShares('false', 'false', 'false', $this->subfolder);
 		$ocs->cleanup();
 
 		// test should return one share within $this->folder
@@ -926,7 +935,7 @@ class ApiTest extends TestCase {
 			$ocs->getShare(0);
 			$this->fail();
 		} catch (OCSNotFoundException $e) {
-			$this->assertEquals('Wrong share ID, share doesn\'t exist', $e->getMessage());
+			$this->assertEquals('Wrong share ID, share does not exist', $e->getMessage());
 		}
 		$ocs->cleanup();
 	}
@@ -945,8 +954,15 @@ class ApiTest extends TestCase {
 			->setSharedBy(self::TEST_FILES_SHARING_API_USER1)
 			->setSharedWith(self::TEST_FILES_SHARING_API_USER2)
 			->setShareType(IShare::TYPE_USER)
-			->setPermissions(19);
+			->setPermissions(19)
+			->setAttributes($this->shareManager->newShare()->newAttributes());
+
+		$this->assertNotNull($share1->getAttributes());
 		$share1 = $this->shareManager->createShare($share1);
+		$this->assertNull($share1->getAttributes());
+		$this->assertEquals(19, $share1->getPermissions());
+		// attributes get cleared when empty
+		$this->assertNull($share1->getAttributes());
 
 		$share2 = $this->shareManager->newShare();
 		$share2->setNode($node1)
@@ -954,14 +970,19 @@ class ApiTest extends TestCase {
 			->setShareType(IShare::TYPE_LINK)
 			->setPermissions(1);
 		$share2 = $this->shareManager->createShare($share2);
+		$this->assertEquals(1, $share2->getPermissions());
 
 		// update permissions
 		$ocs = $this->createOCS(self::TEST_FILES_SHARING_API_USER1);
-		$ocs->updateShare($share1->getId(), 1);
+		$ocs->updateShare(
+			$share1->getId(), 1, null, null, null, null, null, null, null,
+			'[{"scope": "app1", "key": "attr1", "enabled": true}]'
+		);
 		$ocs->cleanup();
 
 		$share1 = $this->shareManager->getShareById('ocinternal:' . $share1->getId());
 		$this->assertEquals(1, $share1->getPermissions());
+		$this->assertEquals(true, $share1->getAttributes()->getAttribute('app1', 'attr1'));
 
 		// update password for link share
 		$this->assertNull($share2->getPassword());
@@ -1036,10 +1057,10 @@ class ApiTest extends TestCase {
 		$config->setAppValue('core', 'shareapi_enforce_expire_date', 'yes');
 
 		$dateWithinRange = new \DateTime();
-		$dateWithinRange->setTime(0,0,0);
+		$dateWithinRange->setTime(0, 0, 0);
 		$dateWithinRange->add(new \DateInterval('P5D'));
 		$dateOutOfRange = new \DateTime();
-		$dateOutOfRange->setTime(0,0,0);
+		$dateOutOfRange->setTime(0, 0, 0);
 		$dateOutOfRange->add(new \DateInterval('P8D'));
 
 		// update expire date to a valid value
@@ -1276,6 +1297,7 @@ class ApiTest extends TestCase {
 	 * Make sure only ISO 8601 dates are accepted
 	 *
 	 * @dataProvider datesProvider
+	 * @group RoutingWeirdness
 	 */
 	public function testPublicLinkExpireDate($date, $valid) {
 		$ocs = $this->createOCS(self::TEST_FILES_SHARING_API_USER1);
@@ -1306,6 +1328,9 @@ class ApiTest extends TestCase {
 		$this->shareManager->deleteShare($share);
 	}
 
+	/**
+	 * @group RoutingWeirdness
+	 */
 	public function testCreatePublicLinkExpireDateValid() {
 		$config = \OC::$server->getConfig();
 
@@ -1329,7 +1354,7 @@ class ApiTest extends TestCase {
 		$this->assertEquals($url, $data['url']);
 
 		$share = $this->shareManager->getShareById('ocinternal:'.$data['id']);
-		$date->setTime(0,0,0);
+		$date->setTime(0, 0, 0);
 		$this->assertEquals($date, $share->getExpirationDate());
 
 		$this->shareManager->deleteShare($share);

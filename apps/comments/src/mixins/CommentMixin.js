@@ -3,7 +3,7 @@
  *
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,9 +20,9 @@
  *
  */
 
-import NewComment from '../services/NewComment'
-import DeleteComment from '../services/DeleteComment'
-import EditComment from '../services/EditComment'
+import NewComment from '../services/NewComment.js'
+import DeleteComment from '../services/DeleteComment.js'
+import EditComment from '../services/EditComment.js'
 import { showError, showUndo, TOAST_UNDO_TIMEOUT } from '@nextcloud/dialogs'
 
 export default {

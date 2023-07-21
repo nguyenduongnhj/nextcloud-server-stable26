@@ -3,7 +3,7 @@
  *
  * @author Roeland Jago Douma <roeland@famdouma.nl>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,7 +23,7 @@
 import Vue from 'vue'
 import { loadState } from '@nextcloud/initial-state'
 
-import WebAuthnSection from './components/WebAuthn/Section'
+import WebAuthnSection from './components/WebAuthn/Section.vue'
 
 // eslint-disable-next-line camelcase
 __webpack_nonce__ = btoa(OC.requestToken)

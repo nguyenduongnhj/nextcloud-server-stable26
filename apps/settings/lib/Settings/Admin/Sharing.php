@@ -12,6 +12,7 @@
  * @author Roeland Jago Douma <roeland@famdouma.nl>
  * @author Sascha Wiswedel <sascha.wiswedel@nextcloud.com>
  * @author Vincent Petry <vincent@nextcloud.com>
+ * @author Thomas Citharel <nextcloud@tcit.fr>
  *
  * @license GNU AGPL version 3 or any later version
  *
@@ -31,16 +32,16 @@
  */
 namespace OCA\Settings\Settings\Admin;
 
-use OC\Share\Share;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\Constants;
 use OCP\IConfig;
 use OCP\IL10N;
-use OCP\Settings\ISettings;
+use OCP\Settings\IDelegatedSettings;
 use OCP\Share\IManager;
 use OCP\Util;
 
-class Sharing implements ISettings {
+class Sharing implements IDelegatedSettings {
 	/** @var IConfig */
 	private $config;
 
@@ -50,13 +51,14 @@ class Sharing implements ISettings {
 	/** @var IManager */
 	private $shareManager;
 
-	/**
-	 * @param IConfig $config
-	 */
-	public function __construct(IConfig $config, IL10N $l, IManager $shareManager) {
+	/** @var IAppManager */
+	private $appManager;
+
+	public function __construct(IConfig $config, IL10N $l, IManager $shareManager, IAppManager $appManager) {
 		$this->config = $config;
 		$this->l = $l;
 		$this->shareManager = $shareManager;
+		$this->appManager = $appManager;
 	}
 
 	/**
@@ -70,8 +72,14 @@ class Sharing implements ISettings {
 		$linksExcludeGroupsList = !is_null(json_decode($linksExcludedGroups))
 			? implode('|', json_decode($linksExcludedGroups, true)) : '';
 
+		$excludedPasswordGroups = $this->config->getAppValue('core', 'shareapi_enforce_links_password_excluded_groups', '');
+		$excludedPasswordGroupsList = !is_null(json_decode($excludedPasswordGroups))
+			? implode('|', json_decode($excludedPasswordGroups, true)) : '';
+
+
 		$parameters = [
 			// Built-In Sharing
+			'sharingAppEnabled' => $this->appManager->isEnabledForUser('files_sharing'),
 			'allowGroupSharing' => $this->config->getAppValue('core', 'shareapi_allow_group_sharing', 'yes'),
 			'allowLinks' => $this->config->getAppValue('core', 'shareapi_allow_links', 'yes'),
 			'allowLinksExcludeGroups' => $linksExcludeGroupsList,
@@ -81,7 +89,12 @@ class Sharing implements ISettings {
 			'restrictUserEnumerationToGroup' => $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_to_group', 'no'),
 			'restrictUserEnumerationToPhone' => $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_to_phone', 'no'),
 			'restrictUserEnumerationFullMatch' => $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_full_match', 'yes'),
-			'enforceLinkPassword' => Util::isPublicLinkPasswordRequired(),
+			'restrictUserEnumerationFullMatchUserId' => $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_full_match_userid', 'yes'),
+			'restrictUserEnumerationFullMatchEmail' => $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_full_match_email', 'yes'),
+			'restrictUserEnumerationFullMatchIgnoreSecondDN' => $this->config->getAppValue('core', 'shareapi_restrict_user_enumeration_full_match_ignore_second_dn', 'no'),
+			'enforceLinkPassword' => Util::isPublicLinkPasswordRequired(false),
+			'passwordExcludedGroups' => $excludedPasswordGroupsList,
+			'passwordExcludedGroupsFeatureEnabled' => $this->config->getSystemValueBool('sharing.allow_disabled_password_enforcement_groups', false),
 			'onlyShareWithGroupMembers' => $this->shareManager->shareWithGroupMembersOnly(),
 			'shareAPIEnabled' => $this->config->getAppValue('core', 'shareapi_enabled', 'yes'),
 			'shareDefaultExpireDateSet' => $this->config->getAppValue('core', 'shareapi_default_expire_date', 'no'),
@@ -91,7 +104,7 @@ class Sharing implements ISettings {
 			'shareExcludedGroupsList' => $excludeGroupsList,
 			'publicShareDisclaimerText' => $this->config->getAppValue('core', 'shareapi_public_link_disclaimertext', null),
 			'enableLinkPasswordByDefault' => $this->config->getAppValue('core', 'shareapi_enable_link_password_by_default', 'no'),
-			'shareApiDefaultPermissions' => $this->config->getAppValue('core', 'shareapi_default_permissions', Constants::PERMISSION_ALL),
+			'shareApiDefaultPermissions' => (int)$this->config->getAppValue('core', 'shareapi_default_permissions', (string)Constants::PERMISSION_ALL),
 			'shareApiDefaultPermissionsCheckboxes' => $this->getSharePermissionList(),
 			'shareDefaultInternalExpireDateSet' => $this->config->getAppValue('core', 'shareapi_default_internal_expire_date', 'no'),
 			'shareInternalExpireAfterNDays' => $this->config->getAppValue('core', 'shareapi_internal_expire_after_n_days', '7'),
@@ -150,5 +163,15 @@ class Sharing implements ISettings {
 	 */
 	public function getPriority() {
 		return 0;
+	}
+
+	public function getAuthorizedAppConfig(): array {
+		return [
+			'core' => ['/shareapi_.*/'],
+		];
+	}
+
+	public function getName(): ?string {
+		return null;
 	}
 }

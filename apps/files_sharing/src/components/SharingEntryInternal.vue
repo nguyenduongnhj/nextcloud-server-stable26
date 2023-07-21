@@ -1,33 +1,35 @@
 
 <template>
-	<SharingEntrySimple
-		class="sharing-entry__internal"
-		:title="t('files_sharing', 'Internal link')"
-		:subtitle="internalLinkSubtitle">
-		<template #avatar>
-			<div class="avatar-external icon-external-white" />
-		</template>
+	<ul>
+		<SharingEntrySimple ref="shareEntrySimple"
+			class="sharing-entry__internal"
+			:title="t('files_sharing', 'Internal link')"
+			:subtitle="internalLinkSubtitle">
+			<template #avatar>
+				<div class="avatar-external icon-external-white" />
+			</template>
 
-		<ActionLink ref="copyButton"
-			:href="internalLink"
-			target="_blank"
-			:icon="copied && copySuccess ? 'icon-checkmark-color' : 'icon-clippy'"
-			@click.prevent="copyLink">
-			{{ clipboardTooltip }}
-		</ActionLink>
-	</SharingEntrySimple>
+			<NcActionLink :href="internalLink"
+				:aria-label="copyLinkTooltip"
+				:title="copyLinkTooltip"
+				target="_blank"
+				:icon="copied && copySuccess ? 'icon-checkmark-color' : 'icon-clippy'"
+				@click.prevent="copyLink" />
+		</SharingEntrySimple>
+	</ul>
 </template>
 
 <script>
 import { generateUrl } from '@nextcloud/router'
-import ActionLink from '@nextcloud/vue/dist/Components/ActionLink'
-import SharingEntrySimple from './SharingEntrySimple'
+import { showSuccess } from '@nextcloud/dialogs'
+import NcActionLink from '@nextcloud/vue/dist/Components/NcActionLink.js'
+import SharingEntrySimple from './SharingEntrySimple.vue'
 
 export default {
 	name: 'SharingEntryInternal',
 
 	components: {
-		ActionLink,
+		NcActionLink,
 		SharingEntrySimple,
 	},
 
@@ -49,23 +51,26 @@ export default {
 	computed: {
 		/**
 		 * Get the internal link to this file id
-		 * @returns {string}
+		 *
+		 * @return {string}
 		 */
 		internalLink() {
 			return window.location.protocol + '//' + window.location.host + generateUrl('/f/') + this.fileInfo.id
 		},
 
 		/**
-		 * Clipboard v-tooltip message
-		 * @returns {string}
+		 * Tooltip message
+		 *
+		 * @return {string}
 		 */
-		clipboardTooltip() {
+		copyLinkTooltip() {
 			if (this.copied) {
-				return this.copySuccess
-					? t('files_sharing', 'Link copied')
-					: t('files_sharing', 'Cannot copy, please copy the link manually')
+				if (this.copySuccess) {
+					return ''
+				}
+				return t('files_sharing', 'Cannot copy, please copy the link manually')
 			}
-			return t('files_sharing', 'Copy to clipboard')
+			return t('files_sharing', 'Copy internal link to clipboard')
 		},
 
 		internalLinkSubtitle() {
@@ -79,9 +84,10 @@ export default {
 	methods: {
 		async copyLink() {
 			try {
-				await this.$copyText(this.internalLink)
-				// focus and show the tooltip
-				this.$refs.copyButton.$el.focus()
+				await navigator.clipboard.writeText(this.internalLink)
+				showSuccess(t('files_sharing', 'Link copied'))
+				// focus and show the tooltip (note: cannot set ref on NcActionLink)
+				this.$refs.shareEntrySimple.$refs.actionsComponent.$el.focus()
 				this.copySuccess = true
 				this.copied = true
 			} catch (error) {

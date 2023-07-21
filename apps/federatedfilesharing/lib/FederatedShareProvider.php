@@ -441,7 +441,7 @@ class FederatedShareProvider implements IShareProvider {
 	 *
 	 * @param IShare $share
 	 * @throws ShareNotFound
-	 * @throws \OC\HintException
+	 * @throws \OCP\HintException
 	 */
 	protected function sendPermissionUpdate(IShare $share) {
 		$remoteId = $this->getRemoteId($share);
@@ -550,7 +550,7 @@ class FederatedShareProvider implements IShareProvider {
 	 *
 	 * @param IShare $share
 	 * @throws ShareNotFound
-	 * @throws \OC\HintException
+	 * @throws \OCP\HintException
 	 */
 	public function delete(IShare $share) {
 		[, $remote] = $this->addressHandler->splitUserRemote($share->getSharedWith());
@@ -577,7 +577,7 @@ class FederatedShareProvider implements IShareProvider {
 	 * @param IShare $share
 	 * @param bool $isOwner the user can either be the owner or the user who re-sahred it
 	 * @throws ShareNotFound
-	 * @throws \OC\HintException
+	 * @throws \OCP\HintException
 	 */
 	protected function revokeShare($share, $isOwner) {
 		if ($this->userManager->userExists($share->getShareOwner()) && $this->userManager->userExists($share->getSharedBy())) {
@@ -618,6 +618,7 @@ class FederatedShareProvider implements IShareProvider {
 			->andWhere($qb->expr()->neq('share_type', $qb->createNamedParameter(IShare::TYPE_CIRCLE)));
 		$qb->execute();
 
+		$qb = $this->dbConnection->getQueryBuilder();
 		$qb->delete('federated_reshares')
 			->where($qb->expr()->eq('share_id', $qb->createNamedParameter($shareId)));
 		$qb->execute();
@@ -638,7 +639,7 @@ class FederatedShareProvider implements IShareProvider {
 	}
 
 
-	public function getSharesInFolder($userId, Folder $node, $reshares) {
+	public function getSharesInFolder($userId, Folder $node, $reshares, $shallow = true) {
 		$qb = $this->dbConnection->getQueryBuilder();
 		$qb->select('*')
 			->from('share', 's')
@@ -664,8 +665,13 @@ class FederatedShareProvider implements IShareProvider {
 			);
 		}
 
-		$qb->innerJoin('s', 'filecache' ,'f', $qb->expr()->eq('s.file_source', 'f.fileid'));
-		$qb->andWhere($qb->expr()->eq('f.parent', $qb->createNamedParameter($node->getId())));
+		$qb->innerJoin('s', 'filecache', 'f', $qb->expr()->eq('s.file_source', 'f.fileid'));
+
+		if ($shallow) {
+			$qb->andWhere($qb->expr()->eq('f.parent', $qb->createNamedParameter($node->getId())));
+		} else {
+			$qb->andWhere($qb->expr()->like('f.path', $qb->createNamedParameter($this->dbConnection->escapeLikeParameter($node->getInternalPath()) . '/%')));
+		}
 
 		$qb->orderBy('id');
 
@@ -964,7 +970,7 @@ class FederatedShareProvider implements IShareProvider {
 	 * @param int $shareType
 	 */
 	public function userDeleted($uid, $shareType) {
-		//TODO: probabaly a good idea to send unshare info to remote servers
+		//TODO: probably a good idea to send unshare info to remote servers
 
 		$qb = $this->dbConnection->getQueryBuilder();
 

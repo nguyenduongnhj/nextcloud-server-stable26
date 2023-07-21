@@ -25,35 +25,27 @@
 		<form @submit.prevent="submit">
 			<p class="transfer-select-row">
 				<span>{{ readableDirectory }}</span>
-				<button v-if="directory === undefined" @click.prevent="start">
+				<NcButton v-if="directory === undefined" @click.prevent="start">
 					{{ t('files', 'Choose file or folder to transfer') }}
-				</button>
-				<button v-else @click.prevent="start">
+				</NcButton>
+				<NcButton v-else @click.prevent="start">
 					{{ t('files', 'Change') }}
-				</button>
+				</NcButton>
 				<span class="error">{{ directoryPickerError }}</span>
 			</p>
 			<p class="new-owner-row">
 				<label for="targetUser">
 					<span>{{ t('files', 'New owner') }}</span>
 				</label>
-				<Multiselect
-					id="targetUser"
+				<NcSelect input-id="targetUser"
 					v-model="selectedUser"
 					:options="formatedUserSuggestions"
 					:multiple="false"
-					:searchable="true"
-					:placeholder="t('files', 'Search users')"
-					:preselect-first="true"
-					:preserve-search="true"
 					:loading="loadingUsers"
-					track-by="user"
 					label="displayName"
-					:internal-search="false"
-					:clear-on-select="false"
 					:user-select="true"
 					class="middle-align"
-					@search-change="findUserDebounced" />
+					@search="findUserDebounced" />
 			</p>
 			<p>
 				<input type="submit"
@@ -71,10 +63,11 @@ import axios from '@nextcloud/axios'
 import debounce from 'debounce'
 import { generateOcsUrl } from '@nextcloud/router'
 import { getFilePickerBuilder, showSuccess } from '@nextcloud/dialogs'
-import Multiselect from '@nextcloud/vue/dist/Components/Multiselect'
+import NcSelect from '@nextcloud/vue/dist/Components/NcSelect.js'
 import Vue from 'vue'
+import NcButton from '@nextcloud/vue/dist/Components/NcButton.js'
 
-import logger from '../logger'
+import logger from '../logger.js'
 
 const picker = getFilePickerBuilder(t('files', 'Choose a file or folder to transfer'))
 	.setMultiSelect(false)
@@ -86,7 +79,8 @@ const picker = getFilePickerBuilder(t('files', 'Choose a file or folder to trans
 export default {
 	name: 'TransferOwnershipDialogue',
 	components: {
-		Multiselect,
+		NcSelect,
+		NcButton,
 	},
 	data() {
 		return {
@@ -162,7 +156,7 @@ export default {
 
 			this.loadingUsers = true
 			try {
-				const response = await axios.get(generateOcsUrl('apps/files_sharing/api/v1', 2) + 'sharees', {
+				const response = await axios.get(generateOcsUrl('apps/files_sharing/api/v1/sharees'), {
 					params: {
 						format: 'json',
 						itemType: 'file',
@@ -197,7 +191,7 @@ export default {
 			}
 			logger.debug('submit transfer ownership form', data)
 
-			const url = generateOcsUrl('apps/files/api/v1/', 2) + 'transferownership'
+			const url = generateOcsUrl('apps/files/api/v1/transferownership')
 
 			axios.post(url, data)
 				.then(resp => resp.data)
@@ -212,7 +206,7 @@ export default {
 					logger.error('Could not send ownership transfer request', { error })
 
 					if (error?.response?.status === 403) {
-						this.submitError = t('files', 'Cannot transfer ownership of a file or folder you don\'t own')
+						this.submitError = t('files', 'Cannot transfer ownership of a file or folder you do not own')
 					} else {
 						this.submitError = error.message || t('files', 'Unknown error')
 					}

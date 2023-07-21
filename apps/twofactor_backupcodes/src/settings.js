@@ -5,7 +5,7 @@
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  * @author Roeland Jago Douma <roeland@famdouma.nl>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -25,8 +25,8 @@
 import { loadState } from '@nextcloud/initial-state'
 import Vue from 'vue'
 
-import PersonalSettings from './views/PersonalSettings'
-import store from './store'
+import PersonalSettings from './views/PersonalSettings.vue'
+import store from './store.js'
 
 Vue.prototype.t = t
 

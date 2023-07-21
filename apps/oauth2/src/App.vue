@@ -20,11 +20,9 @@
   -
   -->
 <template>
-	<div id="oauth2" class="section">
-		<h2>{{ t('oauth2', 'OAuth 2.0 clients') }}</h2>
-		<p class="settings-hint">
-			{{ t('oauth2', 'OAuth 2.0 allows external services to request access to {instanceName}.', { instanceName: OC.theme.name}) }}
-		</p>
+	<NcSettingsSection :title="t('oauth2', 'OAuth 2.0 clients')"
+		:description="t('oauth2', 'OAuth 2.0 allows external services to request access to {instanceName}.', { instanceName })"
+		:doc-url="oauthDocLink">
 		<table v-if="clients.length > 0" class="grid">
 			<thead>
 				<tr>
@@ -56,20 +54,28 @@
 				type="url"
 				name="redirectUri"
 				:placeholder="t('oauth2', 'Redirection URI')">
-			<input type="submit" class="button" :value="t('oauth2', 'Add')">
+			<NcButton native-type="submit" class="inline-button">
+				{{ t('oauth2', 'Add') }}
+			</NcButton>
 		</form>
-	</div>
+	</NcSettingsSection>
 </template>
 
 <script>
 import axios from '@nextcloud/axios'
-import OAuthItem from './components/OAuthItem'
+import OAuthItem from './components/OAuthItem.vue'
 import { generateUrl } from '@nextcloud/router'
+import { getCapabilities } from '@nextcloud/capabilities'
+import NcSettingsSection from '@nextcloud/vue/dist/Components/NcSettingsSection.js'
+import NcButton from '@nextcloud/vue/dist/Components/NcButton.js'
+import { loadState } from '@nextcloud/initial-state'
 
 export default {
 	name: 'App',
 	components: {
 		OAuthItem,
+		NcSettingsSection,
+		NcButton,
 	},
 	props: {
 		clients: {
@@ -85,12 +91,19 @@ export default {
 				errorMsg: '',
 				error: false,
 			},
+			oauthDocLink: loadState('oauth2', 'oauth2-doc-link'),
 		}
+	},
+	computed: {
+		instanceName() {
+			return getCapabilities().theming.name
+		},
 	},
 	methods: {
 		deleteClient(id) {
 			axios.delete(generateUrl('apps/oauth2/clients/{id}', { id }))
 				.then((response) => {
+					// eslint-disable-next-line vue/no-mutating-props
 					this.clients = this.clients.filter(client => client.id !== id)
 				})
 		},
@@ -104,6 +117,7 @@ export default {
 					redirectUri: this.newClient.redirectUri,
 				}
 			).then(response => {
+				// eslint-disable-next-line vue/no-mutating-props
 				this.clients.push(response.data)
 
 				this.newClient.name = ''
@@ -119,5 +133,11 @@ export default {
 <style scoped>
 	table {
 		max-width: 800px;
+	}
+
+	/** Overwrite button height and position to be aligned with the text input */
+	.inline-button {
+		min-height: 34px !important;
+		display: inline-flex !important;
 	}
 </style>

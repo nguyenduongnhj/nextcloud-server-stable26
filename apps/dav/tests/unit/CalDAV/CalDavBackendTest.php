@@ -35,6 +35,7 @@ use DateTime;
 use DateTimeZone;
 use OCA\DAV\CalDAV\CalDavBackend;
 use OCA\DAV\CalDAV\Calendar;
+use OCA\DAV\DAV\Sharing\Plugin as SharingPlugin;
 use OCA\DAV\Events\CalendarDeletedEvent;
 use OCP\IConfig;
 use OCP\IL10N;
@@ -51,10 +52,10 @@ use Sabre\DAVACL\IACL;
  * @package OCA\DAV\Tests\unit\CalDAV
  */
 class CalDavBackendTest extends AbstractCalDavBackend {
-	public function testCalendarOperations() {
+	public function testCalendarOperations(): void {
 		$calendarId = $this->createTestCalendar();
 
-		// update it's display name
+		// update its display name
 		$patch = new PropPatch([
 			'{DAV:}displayname' => 'Unit test',
 			'{urn:ietf:params:xml:ns:caldav}calendar-description' => 'Calendar used for unit testing'
@@ -123,8 +124,7 @@ class CalDavBackendTest extends AbstractCalDavBackend {
 	/**
 	 * @dataProvider providesSharingData
 	 */
-	public function testCalendarSharing($userCanRead, $userCanWrite, $groupCanRead, $groupCanWrite, $add) {
-
+	public function testCalendarSharing($userCanRead, $userCanWrite, $groupCanRead, $groupCanWrite, $add): void {
 		/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject $l10n */
 		$l10n = $this->createMock(IL10N::class);
 		$l10n
@@ -133,6 +133,8 @@ class CalDavBackendTest extends AbstractCalDavBackend {
 			->willReturnCallback(function ($text, $parameters = []) {
 				return vsprintf($text, $parameters);
 			});
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
 
 		$config = $this->createMock(IConfig::class);
 
@@ -147,14 +149,11 @@ class CalDavBackendTest extends AbstractCalDavBackend {
 		$calendarId = $this->createTestCalendar();
 		$calendars = $this->backend->getCalendarsForUser(self::UNIT_TEST_USER);
 		$this->assertCount(1, $calendars);
-		$calendar = new Calendar($this->backend, $calendars[0], $l10n, $config);
-		$this->legacyDispatcher->expects($this->at(0))
-			->method('dispatch')
-			->with('\OCA\DAV\CalDAV\CalDavBackend::updateShares');
+		$calendar = new Calendar($this->backend, $calendars[0], $l10n, $config, $logger);
 		$this->backend->updateShares($calendar, $add, []);
 		$calendars = $this->backend->getCalendarsForUser(self::UNIT_TEST_USER1);
 		$this->assertCount(1, $calendars);
-		$calendar = new Calendar($this->backend, $calendars[0], $l10n, $config);
+		$calendar = new Calendar($this->backend, $calendars[0], $l10n, $config, $logger);
 		$acl = $calendar->getACL();
 		$this->assertAcl(self::UNIT_TEST_USER, '{DAV:}read', $acl);
 		$this->assertAcl(self::UNIT_TEST_USER, '{DAV:}write', $acl);
@@ -204,7 +203,7 @@ EOD;
 		self::assertEmpty($calendars);
 	}
 
-	public function testCalendarObjectsOperations() {
+	public function testCalendarObjectsOperations(): void {
 		$calendarId = $this->createTestCalendar();
 
 		// create a card
@@ -230,13 +229,13 @@ EOD;
 			->method('dispatchTyped');
 		$this->backend->createCalendarObject($calendarId, $uri, $calData);
 
-		// get all the cards
+		// get all the calendar objects
 		$calendarObjects = $this->backend->getCalendarObjects($calendarId);
 		$this->assertCount(1, $calendarObjects);
 		$this->assertEquals($calendarId, $calendarObjects[0]['calendarid']);
 		$this->assertArrayHasKey('classification', $calendarObjects[0]);
 
-		// get the cards
+		// get the calendar objects
 		$calendarObject = $this->backend->getCalendarObject($calendarId, $uri);
 		$this->assertNotNull($calendarObject);
 		$this->assertArrayHasKey('id', $calendarObject);
@@ -245,6 +244,7 @@ EOD;
 		$this->assertArrayHasKey('etag', $calendarObject);
 		$this->assertArrayHasKey('size', $calendarObject);
 		$this->assertArrayHasKey('classification', $calendarObject);
+		$this->assertArrayHasKey('{' . SharingPlugin::NS_NEXTCLOUD . '}deleted-at', $calendarObject);
 		$this->assertEquals($calData, $calendarObject['calendardata']);
 
 		// update the card
@@ -278,7 +278,7 @@ EOD;
 	}
 
 
-	public function testMultipleCalendarObjectsWithSameUID() {
+	public function testMultipleCalendarObjectsWithSameUID(): void {
 		$this->expectException(\Sabre\DAV\Exception\BadRequest::class);
 		$this->expectExceptionMessage('Calendar object with uid already exists in this calendar collection.');
 
@@ -307,7 +307,7 @@ EOD;
 		$this->backend->createCalendarObject($calendarId, $uri1, $calData);
 	}
 
-	public function testMultiCalendarObjects() {
+	public function testMultiCalendarObjects(): void {
 		$calendarId = $this->createTestCalendar();
 
 		// create an event
@@ -416,13 +416,18 @@ EOD;
 	/**
 	 * @dataProvider providesCalendarQueryParameters
 	 */
-	public function testCalendarQuery($expectedEventsInResult, $propFilters, $compFilter) {
+	public function testCalendarQuery($expectedEventsInResult, $propFilters, $compFilter): void {
 		$calendarId = $this->createTestCalendar();
 		$events = [];
 		$events[0] = $this->createEvent($calendarId, '20130912T130000Z', '20130912T140000Z');
 		$events[1] = $this->createEvent($calendarId, '20130912T150000Z', '20130912T170000Z');
 		$events[2] = $this->createEvent($calendarId, '20130912T173000Z', '20130912T220000Z');
-		$events[3] = $this->createEvent($calendarId, '21130912T130000Z', '22130912T130000Z');
+		if (PHP_INT_SIZE > 8) {
+			$events[3] = $this->createEvent($calendarId, '21130912T130000Z', '22130912T130000Z');
+		} else {
+			/* On 32bit we do not support events after 2038 */
+			$events[3] = $this->createEvent($calendarId, '20370912T130000Z', '20370912T130000Z');
+		}
 
 		$result = $this->backend->calendarQuery($calendarId, [
 			'name' => '',
@@ -436,7 +441,7 @@ EOD;
 		$this->assertEqualsCanonicalizing($expectedEventsInResult, $result);
 	}
 
-	public function testGetCalendarObjectByUID() {
+	public function testGetCalendarObjectByUID(): void {
 		$calendarId = $this->createTestCalendar();
 		$uri = static::getUniqueID('calobj');
 		$calData = <<<'EOD'
@@ -470,11 +475,11 @@ EOD;
 			'only-events' => [[0, 1, 2, 3], [], [['name' => 'VEVENT', 'is-not-defined' => false, 'comp-filters' => [], 'time-range' => ['start' => null, 'end' => null], 'prop-filters' => []]],],
 			'start' => [[1, 2, 3], [], [['name' => 'VEVENT', 'is-not-defined' => false, 'comp-filters' => [], 'time-range' => ['start' => new DateTime('2013-09-12 14:00:00', new DateTimeZone('UTC')), 'end' => null], 'prop-filters' => []]],],
 			'end' => [[0], [], [['name' => 'VEVENT', 'is-not-defined' => false, 'comp-filters' => [], 'time-range' => ['start' => null, 'end' => new DateTime('2013-09-12 14:00:00', new DateTimeZone('UTC'))], 'prop-filters' => []]],],
-			'future' => [[3], [], [['name' => 'VEVENT', 'is-not-defined' => false, 'comp-filters' => [], 'time-range' => ['start' => new DateTime('2099-09-12 14:00:00', new DateTimeZone('UTC')), 'end' => null], 'prop-filters' => []]],],
+			'future' => [[3], [], [['name' => 'VEVENT', 'is-not-defined' => false, 'comp-filters' => [], 'time-range' => ['start' => new DateTime('2036-09-12 14:00:00', new DateTimeZone('UTC')), 'end' => null], 'prop-filters' => []]],],
 		];
 	}
 
-	public function testSyncSupport() {
+	public function testSyncSupport(): void {
 		$calendarId = $this->createTestCalendar();
 
 		// fist call without synctoken
@@ -489,7 +494,7 @@ EOD;
 		$this->assertEquals($event, $changes['added'][0]);
 	}
 
-	public function testPublications() {
+	public function testPublications(): void {
 		$this->dispatcher->expects(self::atLeastOnce())
 			->method('dispatchTyped');
 
@@ -500,8 +505,8 @@ EOD;
 		/** @var IL10N|\PHPUnit\Framework\MockObject\MockObject $l10n */
 		$l10n = $this->createMock(IL10N::class);
 		$config = $this->createMock(IConfig::class);
-
-		$calendar = new Calendar($this->backend, $calendarInfo, $l10n, $config);
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$calendar = new Calendar($this->backend, $calendarInfo, $l10n, $config, $logger);
 		$calendar->setPublishStatus(true);
 		$this->assertNotEquals(false, $calendar->getPublishStatus());
 
@@ -521,7 +526,7 @@ EOD;
 		$this->backend->getPublicCalendar($publicCalendarURI);
 	}
 
-	public function testSubscriptions() {
+	public function testSubscriptions(): void {
 		$id = $this->backend->createSubscription(self::UNIT_TEST_USER, 'Subscription', [
 			'{http://calendarserver.org/ns/}source' => new Href('test-source'),
 			'{http://apple.com/ns/ical/}calendar-color' => '#1C4587',
@@ -628,7 +633,7 @@ EOS;
 	 * @dataProvider providesSchedulingData
 	 * @param $objectData
 	 */
-	public function testScheduling($objectData) {
+	public function testScheduling($objectData): void {
 		$this->backend->createSchedulingObject(self::UNIT_TEST_USER, 'Sample Schedule', $objectData);
 
 		$sos = $this->backend->getSchedulingObjects(self::UNIT_TEST_USER);
@@ -646,9 +651,16 @@ EOS;
 	/**
 	 * @dataProvider providesCalDataForGetDenormalizedData
 	 */
-	public function testGetDenormalizedData($expected, $key, $calData) {
-		$actual = $this->backend->getDenormalizedData($calData);
-		$this->assertEquals($expected, $actual[$key]);
+	public function testGetDenormalizedData($expected, $key, $calData): void {
+		try {
+			$actual = $this->backend->getDenormalizedData($calData);
+			$this->assertEquals($expected, $actual[$key]);
+		} catch (\ValueError $e) {
+			if (($e->getMessage() === 'Epoch doesn\'t fit in a PHP integer') && (PHP_INT_SIZE < 8)) {
+				$this->markTestSkipped('This fail on 32bits because of PHP limitations in DateTime');
+			}
+			throw $e;
+		}
 	}
 
 	public function providesCalDataForGetDenormalizedData() {
@@ -665,7 +677,7 @@ EOS;
 		];
 	}
 
-	public function testCalendarSearch() {
+	public function testCalendarSearch(): void {
 		$calendarId = $this->createTestCalendar();
 
 		$uri = static::getUniqueID('calobj');
@@ -798,7 +810,7 @@ EOD;
 	/**
 	 * @dataProvider searchDataProvider
 	 */
-	public function testSearch(bool $isShared, array $searchOptions, int $count) {
+	public function testSearch(bool $isShared, array $searchOptions, int $count): void {
 		$calendarId = $this->createTestCalendar();
 
 		$uris = [];
@@ -905,7 +917,7 @@ EOD;
 		];
 	}
 
-	public function testSameUriSameIdForDifferentCalendarTypes() {
+	public function testSameUriSameIdForDifferentCalendarTypes(): void {
 		$calendarId = $this->createTestCalendar();
 		$subscriptionId = $this->createTestSubscription();
 
@@ -951,7 +963,7 @@ EOD;
 		$this->assertEquals($calData2, $this->backend->getCalendarObject($subscriptionId, $uri, CalDavBackend::CALENDAR_TYPE_SUBSCRIPTION)['calendardata']);
 	}
 
-	public function testPurgeAllCachedEventsForSubscription() {
+	public function testPurgeAllCachedEventsForSubscription(): void {
 		$subscriptionId = $this->createTestSubscription();
 		$uri = static::getUniqueID('calobj');
 		$calData = <<<EOD
@@ -977,7 +989,7 @@ EOD;
 		$this->assertEquals(null, $this->backend->getCalendarObject($subscriptionId, $uri, CalDavBackend::CALENDAR_TYPE_SUBSCRIPTION));
 	}
 
-	public function testCalendarMovement() {
+	public function testCalendarMovement(): void {
 		$this->backend->createCalendar(self::UNIT_TEST_USER, 'Example', []);
 
 		$this->assertCount(1, $this->backend->getCalendarsForUser(self::UNIT_TEST_USER));
@@ -1237,7 +1249,9 @@ EOD;
 
 		$sharerCalendars = $this->backend->getCalendarsForUser($sharer);
 		$this->assertCount(1, $sharerCalendars);
-		$sharerCalendar = new Calendar($this->backend, $sharerCalendars[0], $l10n, $config);
+
+		$logger = $this->createMock(\Psr\Log\LoggerInterface::class);
+		$sharerCalendar = new Calendar($this->backend, $sharerCalendars[0], $l10n, $config, $logger);
 		$this->backend->updateShares($sharerCalendar, [
 			[
 				'href' => 'principal:' . $me,
@@ -1269,5 +1283,59 @@ EOD;
 		$this->assertEquals($sharerPublic, $sharerSearchResults[0]['calendardata']);
 		$this->assertEquals($sharerPrivate, $sharerSearchResults[1]['calendardata']);
 		$this->assertEquals($sharerConfidential, $sharerSearchResults[2]['calendardata']);
+	}
+
+	/**
+	 * @throws \OCP\DB\Exception
+	 * @throws \Sabre\DAV\Exception\BadRequest
+	 */
+	public function testPruneOutdatedSyncTokens(): void {
+		$calendarId = $this->createTestCalendar();
+
+		$uri = static::getUniqueID('calobj');
+		$calData = <<<EOD
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:Nextcloud Calendar
+BEGIN:VEVENT
+CREATED;VALUE=DATE-TIME:20130910T125139Z
+UID:47d15e3ec8
+LAST-MODIFIED;VALUE=DATE-TIME:20130910T125139Z
+DTSTAMP;VALUE=DATE-TIME:20130910T125139Z
+SUMMARY:Test Event
+DTSTART;VALUE=DATE-TIME:20130912T130000Z
+DTEND;VALUE=DATE-TIME:20130912T140000Z
+CLASS:PUBLIC
+END:VEVENT
+END:VCALENDAR
+EOD;
+
+		$this->backend->createCalendarObject($calendarId, $uri, $calData);
+
+		// update the card
+		$calData = <<<'EOD'
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:Nextcloud Calendar
+BEGIN:VEVENT
+CREATED;VALUE=DATE-TIME:20130910T125139Z
+UID:47d15e3ec8
+LAST-MODIFIED;VALUE=DATE-TIME:20130910T125139Z
+DTSTAMP;VALUE=DATE-TIME:20130910T125139Z
+SUMMARY:123 Event 🙈
+DTSTART;VALUE=DATE-TIME:20130912T130000Z
+DTEND;VALUE=DATE-TIME:20130912T140000Z
+ATTENDEE;CN=test:mailto:foo@bar.com
+END:VEVENT
+END:VCALENDAR
+EOD;
+		$this->backend->updateCalendarObject($calendarId, $uri, $calData);
+		$deleted = $this->backend->pruneOutdatedSyncTokens(0);
+		// At least one from the object creation and one from the object update
+		$this->assertGreaterThanOrEqual(2, $deleted);
+		$changes = $this->backend->getChangesForCalendar($calendarId, '5', 1);
+		$this->assertEmpty($changes['added']);
+		$this->assertEmpty($changes['modified']);
+		$this->assertEmpty($changes['deleted']);
 	}
 }

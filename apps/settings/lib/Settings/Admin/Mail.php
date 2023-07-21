@@ -29,17 +29,23 @@ namespace OCA\Settings\Settings\Admin;
 
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IConfig;
-use OCP\Settings\ISettings;
+use OCP\IL10N;
+use OCP\Settings\IDelegatedSettings;
 
-class Mail implements ISettings {
+class Mail implements IDelegatedSettings {
 	/** @var IConfig */
 	private $config;
 
+	/** @var IL10N $l */
+	private $l;
+
 	/**
 	 * @param IConfig $config
+	 * @param IL10N $l
 	 */
-	public function __construct(IConfig $config) {
+	public function __construct(IConfig $config, IL10N $l) {
 		$this->config = $config;
+		$this->l = $l;
 	}
 
 	/**
@@ -55,7 +61,6 @@ class Mail implements ISettings {
 			'mail_smtpsecure' => $this->config->getSystemValue('mail_smtpsecure', ''),
 			'mail_smtphost' => $this->config->getSystemValue('mail_smtphost', ''),
 			'mail_smtpport' => $this->config->getSystemValue('mail_smtpport', ''),
-			'mail_smtpauthtype' => $this->config->getSystemValue('mail_smtpauthtype', ''),
 			'mail_smtpauth' => $this->config->getSystemValue('mail_smtpauth', false),
 			'mail_smtpname' => $this->config->getSystemValue('mail_smtpname', ''),
 			'mail_smtppassword' => $this->config->getSystemValue('mail_smtppassword', ''),
@@ -89,5 +94,13 @@ class Mail implements ISettings {
 	 */
 	public function getPriority() {
 		return 10;
+	}
+
+	public function getName(): ?string {
+		return $this->l->t('Email server');
+	}
+
+	public function getAuthorizedAppConfig(): array {
+		return [];
 	}
 }

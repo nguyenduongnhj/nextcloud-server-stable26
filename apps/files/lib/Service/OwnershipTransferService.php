@@ -115,6 +115,9 @@ class OwnershipTransferService {
 
 		// setup filesystem
 		// Requesting the user folder will set it up if the user hasn't logged in before
+		// We need a setupFS for the full filesystem setup before as otherwise we will just return
+		// a lazy root folder which does not create the destination users folder
+		\OC_Util::setupFS($destinationUser->getUID());
 		\OC::$server->getUserFolder($destinationUser->getUID());
 		Filesystem::initMountPoints($sourceUid);
 		Filesystem::initMountPoints($destinationUid);
@@ -144,13 +147,12 @@ class OwnershipTransferService {
 			throw new TransferOwnershipException("Unknown path provided: $path", 1);
 		}
 
-		if ($move && (
-				!$view->is_dir($finalTarget) || (
-					!$firstLogin &&
-					count($view->getDirectoryContent($finalTarget)) > 0
-				)
-			)
-		) {
+		if ($move && !$view->is_dir($finalTarget)) {
+			// Initialize storage
+			\OC_Util::setupFS($destinationUser->getUID());
+		}
+
+		if ($move && !$firstLogin && count($view->getDirectoryContent($finalTarget)) > 0) {
 			throw new TransferOwnershipException("Destination path does not exists or is not empty", 1);
 		}
 
@@ -287,7 +289,7 @@ class OwnershipTransferService {
 		$shares = [];
 		$progress = new ProgressBar($output);
 
-		foreach ([IShare::TYPE_GROUP, IShare::TYPE_USER, IShare::TYPE_LINK, IShare::TYPE_REMOTE, IShare::TYPE_ROOM, IShare::TYPE_EMAIL, IShare::TYPE_CIRCLE, IShare::TYPE_DECK] as $shareType) {
+		foreach ([IShare::TYPE_GROUP, IShare::TYPE_USER, IShare::TYPE_LINK, IShare::TYPE_REMOTE, IShare::TYPE_ROOM, IShare::TYPE_EMAIL, IShare::TYPE_CIRCLE, IShare::TYPE_DECK, IShare::TYPE_SCIENCEMESH] as $shareType) {
 			$offset = 0;
 			while (true) {
 				$sharePage = $this->shareManager->getSharesBy($sourceUid, $shareType, null, true, 50, $offset);
@@ -444,13 +446,17 @@ class OwnershipTransferService {
 		$output->writeln("Restoring incoming shares ...");
 		$progress = new ProgressBar($output, count($sourceShares));
 		$prefix = "$destinationUid/files";
+		$finalShareTarget = '';
 		if (substr($finalTarget, 0, strlen($prefix)) === $prefix) {
 			$finalShareTarget = substr($finalTarget, strlen($prefix));
 		}
 		foreach ($sourceShares as $share) {
 			try {
 				// Only restore if share is in given path.
-				$pathToCheck = '/' . trim($path) . '/';
+				$pathToCheck = '/';
+				if (trim($path, '/') !== '') {
+					$pathToCheck = '/' . trim($path) . '/';
+				}
 				if (substr($share->getTarget(), 0, strlen($pathToCheck)) !== $pathToCheck) {
 					continue;
 				}

@@ -9,7 +9,6 @@ OC.L10N.register(
     "Error configuring OAuth2" : "OAuth2 seadistamise tõrge",
     "Generate keys" : "Loo võtmed",
     "Error generating key pair" : "Viga võtmepaari loomisel",
-    "All users. Type to select user or group." : "Kõik kasutajad. Kirjuta, et valida kasutaja või grupp.",
     "Enable encryption" : "Luba krüpteerimine",
     "Enable previews" : "Luba eelvaated",
     "Enable sharing" : "Luba jagamine",
@@ -17,9 +16,10 @@ OC.L10N.register(
     "Never" : "Mitte kunagi",
     "Once every direct access" : "Kord iga otsese pöördumise korral",
     "Read only" : "kirjutuskaitstud",
-    "Delete" : "Kustuta",
+    "Disconnect" : "Ühenda lahti",
     "Admin defined" : "Admini poolt määratud",
     "Saved" : "Salvestatud",
+    "Saving …" : "Salvestamine …",
     "Save" : "Salvesta",
     "Empty response from the server" : "Tühi vastus serverilt",
     "Couldn't get the list of external mount points: {type}" : "Välise ühenduspunkti hankimine ebaõnnestus: {type}",
@@ -83,10 +83,6 @@ OC.L10N.register(
     "Configuration" : "Seadistamine",
     "Available for" : "Saadaval",
     "Add storage" : "Lisa andmehoidla",
-    "Advanced settings" : "Lisavalikud",
-    "External storages" : "Välised andmehoidlad",
-    "(group)" : "(grupp)",
-    "SMB / CIFS" : "SMB / CIFS",
-    "SMB / CIFS using OC login" : "SMB / CIFS kasutades OC logimist"
+    "Advanced settings" : "Lisavalikud"
 },
 "nplurals=2; plural=(n != 1);");

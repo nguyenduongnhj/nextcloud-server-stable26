@@ -33,9 +33,9 @@
 
 <script>
 // eslint-disable-next-line no-unused-vars
-import Share from '../models/Share'
-import SharingEntry from '../components/SharingEntry'
-import ShareTypes from '../mixins/ShareTypes'
+import Share from '../models/Share.js'
+import SharingEntry from '../components/SharingEntry.vue'
+import ShareTypes from '../mixins/ShareTypes.js'
 
 export default {
 	name: 'SharingList',
@@ -80,6 +80,7 @@ export default {
 		 */
 		removeShare(share) {
 			const index = this.shares.findIndex(item => item === share)
+			// eslint-disable-next-line vue/no-mutating-props
 			this.shares.splice(index, 1)
 		},
 	},

@@ -39,12 +39,15 @@ use OC\Authentication\Token\IProvider;
 use OC\Server;
 use OCA\Settings\Hooks;
 use OCA\Settings\Listener\AppPasswordCreatedActivityListener;
+use OCA\Settings\Listener\GroupRemovedListener;
 use OCA\Settings\Listener\UserAddedToGroupActivityListener;
 use OCA\Settings\Listener\UserRemovedFromGroupActivityListener;
 use OCA\Settings\Mailer\NewUserMailHelper;
 use OCA\Settings\Middleware\SubadminMiddleware;
 use OCA\Settings\Search\AppSearch;
 use OCA\Settings\Search\SectionSearch;
+use OCA\Settings\UserMigration\AccountMigrator;
+use OCA\Settings\WellKnown\ChangePasswordHandler;
 use OCA\Settings\WellKnown\SecurityTxtHandler;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -52,6 +55,7 @@ use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\IAppContainer;
 use OCP\Defaults;
+use OCP\Group\Events\GroupDeletedEvent;
 use OCP\Group\Events\UserAddedEvent;
 use OCP\Group\Events\UserRemovedEvent;
 use OCP\IServerContainer;
@@ -79,9 +83,11 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(AppPasswordCreatedEvent::class, AppPasswordCreatedActivityListener::class);
 		$context->registerEventListener(UserAddedEvent::class, UserAddedToGroupActivityListener::class);
 		$context->registerEventListener(UserRemovedEvent::class, UserRemovedFromGroupActivityListener::class);
+		$context->registerEventListener(GroupDeletedEvent::class, GroupRemovedListener::class);
 
 		// Register well-known handlers
 		$context->registerWellKnownHandler(SecurityTxtHandler::class);
+		$context->registerWellKnownHandler(ChangePasswordHandler::class);
 
 		/**
 		 * Core class wrappers
@@ -128,6 +134,8 @@ class Application extends App implements IBootstrap {
 				Util::getDefaultEmailAddress('no-reply')
 			);
 		});
+
+		$context->registerUserMigrator(AccountMigrator::class);
 	}
 
 	public function boot(IBootContext $context): void {

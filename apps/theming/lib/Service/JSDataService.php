@@ -32,34 +32,35 @@ use OCA\Theming\Util;
 use OCP\IConfig;
 
 class JSDataService implements \JsonSerializable {
-
-	/** @var ThemingDefaults */
-	private $themingDefaults;
-	/** @var Util */
-	private $util;
-	/** @var IConfig */
-	private $appConfig;
+	private ThemingDefaults $themingDefaults;
+	private Util $util;
+	private IConfig $appConfig;
+	private ThemesService $themesService;
 
 	public function __construct(
 		ThemingDefaults $themingDefaults,
 		Util $util,
-		IConfig $appConfig
+		IConfig $appConfig,
+		ThemesService $themesService
 	) {
 		$this->themingDefaults = $themingDefaults;
 		$this->util = $util;
 		$this->appConfig = $appConfig;
+		$this->themesService = $themesService;
 	}
 
-	public function jsonSerialize() {
+	public function jsonSerialize(): array {
 		return [
 			'name' => $this->themingDefaults->getName(),
 			'url' => $this->themingDefaults->getBaseUrl(),
 			'slogan' => $this->themingDefaults->getSlogan(),
 			'color' => $this->themingDefaults->getColorPrimary(),
+			'defaultColor' => $this->themingDefaults->getDefaultColorPrimary(),
 			'imprintUrl' => $this->themingDefaults->getImprintUrl(),
 			'privacyUrl' => $this->themingDefaults->getPrivacyUrl(),
 			'inverted' => $this->util->invertTextColor($this->themingDefaults->getColorPrimary()),
-			'cacheBuster' => $this->appConfig->getAppValue(Application::APP_ID, 'cachebuster', '0'),
+			'cacheBuster' => $this->util->getCacheBuster(),
+			'enabledThemes' => $this->themesService->getEnabledThemes(),
 		];
 	}
 }

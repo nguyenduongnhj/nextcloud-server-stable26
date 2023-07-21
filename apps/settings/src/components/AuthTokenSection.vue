@@ -26,7 +26,7 @@
 			{{ t('settings', 'Web, desktop and mobile clients currently logged in to your account.') }}
 		</p>
 		<AuthTokenList :tokens="tokens"
-			@toggleScope="toggleTokenScope"
+			@toggle-scope="toggleTokenScope"
 			@rename="rename"
 			@delete="deleteToken"
 			@wipe="wipeToken" />
@@ -36,11 +36,12 @@
 
 <script>
 import axios from '@nextcloud/axios'
-import confirmPassword from '@nextcloud/password-confirmation'
+import { confirmPassword } from '@nextcloud/password-confirmation'
+import '@nextcloud/password-confirmation/dist/style.css'
 import { generateUrl } from '@nextcloud/router'
 
-import AuthTokenList from './AuthTokenList'
-import AuthTokenSetupDialogue from './AuthTokenSetupDialogue'
+import AuthTokenList from './AuthTokenList.vue'
+import AuthTokenSetupDialogue from './AuthTokenSetupDialogue.vue'
 
 const confirm = () => {
 	return new Promise(resolve => {
@@ -55,8 +56,9 @@ const confirm = () => {
 
 /**
  * Tap into a promise without losing the value
+ *
  * @param {Function} cb the callback
- * @returns {any} val the value
+ * @return {any} val the value
  */
 const tap = cb => val => {
 	cb(val)
@@ -94,10 +96,11 @@ export default {
 			return axios.post(this.baseUrl, data)
 				.then(resp => resp.data)
 				.then(tap(() => console.debug('app token created')))
+				// eslint-disable-next-line vue/no-mutating-props
 				.then(tap(data => this.tokens.push(data.deviceToken)))
 				.catch(err => {
 					console.error.bind('could not create app password', err)
-					OC.Notification.showTemporary(t('core', 'Error while creating device token'))
+					OC.Notification.showTemporary(t('settings', 'Error while creating device token'))
 					throw err
 				})
 		},
@@ -111,7 +114,7 @@ export default {
 				.then(tap(() => console.debug('app token scope updated')))
 				.catch(err => {
 					console.error.bind('could not update app token scope', err)
-					OC.Notification.showTemporary(t('core', 'Error while updating device token scope'))
+					OC.Notification.showTemporary(t('settings', 'Error while updating device token scope'))
 
 					// Restore
 					token.scope[scope] = oldVal
@@ -129,7 +132,7 @@ export default {
 				.then(tap(() => console.debug('app token name updated')))
 				.catch(err => {
 					console.error.bind('could not update app token name', err)
-					OC.Notification.showTemporary(t('core', 'Error while updating device token name'))
+					OC.Notification.showTemporary(t('settings', 'Error while updating device token name'))
 
 					// Restore
 					token.name = oldName
@@ -142,6 +145,7 @@ export default {
 		deleteToken(token) {
 			console.debug('deleting app token', token)
 
+			// eslint-disable-next-line vue/no-mutating-props
 			this.tokens = this.tokens.filter(t => t !== token)
 
 			return axios.delete(this.baseUrl + '/' + token.id)
@@ -149,9 +153,10 @@ export default {
 				.then(tap(() => console.debug('app token deleted')))
 				.catch(err => {
 					console.error.bind('could not delete app token', err)
-					OC.Notification.showTemporary(t('core', 'Error while deleting the token'))
+					OC.Notification.showTemporary(t('settings', 'Error while deleting the token'))
 
 					// Restore
+					// eslint-disable-next-line vue/no-mutating-props
 					this.tokens.push(token)
 				})
 		},
@@ -171,7 +176,7 @@ export default {
 				token.type = 2
 			} catch (err) {
 				console.error('could not wipe app token', err)
-				OC.Notification.showTemporary(t('core', 'Error while wiping the device with the token'))
+				OC.Notification.showTemporary(t('settings', 'Error while wiping the device with the token'))
 			}
 		},
 	},

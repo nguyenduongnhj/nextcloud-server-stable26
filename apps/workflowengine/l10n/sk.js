@@ -54,16 +54,11 @@ OC.L10N.register(
     "Images" : "Obrázky",
     "Office documents" : "Dokumenty Office",
     "PDF documents" : "Dokumenty PDF",
+    "Custom MIME type" : "Vlastný typ MIME",
     "Custom mimetype" : "Vlastné typy mime",
-    "Select a tag" : "Vyber štítok",
-    "No results" : "Žiadne výsledky",
-    "%s (invisible)" : "%s (neviditeľné)",
-    "%s (restricted)" : "%s (obmedzené)",
     "Please enter a valid time span" : "Zadajte prosím platné časové rozmedzie",
     "Select a request URL" : "Vybrať URL požiadavku",
-    "Predefined URLs" : "Preddefinované URL",
     "Files WebDAV" : "WebDAV súbory",
-    "Others" : "Ostatné",
     "Custom URL" : "Vlastná URL",
     "Select a user agent" : "Zvoliť užívateľského agenta",
     "Android client" : "Android klient",
@@ -115,6 +110,7 @@ OC.L10N.register(
     "User group membership" : "Členstvo v skupine používateľov",
     "is member of" : "Je členom",
     "is not member of" : "Nie je členom",
-    "Browse the app store" : "Prehliadajte obchod aplikácií"
+    "Predefined URLs" : "Preddefinované URL",
+    "Others" : "Ostatné"
 },
 "nplurals=4; plural=(n % 1 == 0 && n == 1 ? 0 : n % 1 == 0 && n >= 2 && n <= 4 ? 1 : n % 1 != 0 ? 2: 3);");

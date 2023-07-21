@@ -6,6 +6,7 @@
  * @author Christoph Wurst <christoph@winzerhof-wurst.at>
  * @author Joas Schilling <coding@schilljs.com>
  * @author Jörn Friedrich Dreyer <jfd@butonic.de>
+ * @author Marc Hefter <marchefter@march42.net>
  * @author Morris Jobke <hey@morrisjobke.de>
  * @author Roeland Jago Douma <roeland@famdouma.nl>
  * @author Roger Szabo <roger.szabo@web.de>
@@ -28,10 +29,9 @@
  */
 namespace OCA\User_LDAP\User;
 
-use OC\Cache\CappedMemoryCache;
+use OCP\Cache\CappedMemoryCache;
 use OCA\User_LDAP\Access;
 use OCA\User_LDAP\FilesystemHelper;
-use OCA\User_LDAP\LogWrapper;
 use OCP\IAvatarManager;
 use OCP\IConfig;
 use OCP\IDBConnection;
@@ -39,6 +39,7 @@ use OCP\Image;
 use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
 use OCP\Share\IManager;
+use Psr\Log\LoggerInterface;
 
 /**
  * Manager
@@ -47,48 +48,25 @@ use OCP\Share\IManager;
  * cache
  */
 class Manager {
-	/** @var Access */
-	protected $access;
-
-	/** @var IConfig */
-	protected $ocConfig;
-
-	/** @var IDBConnection */
-	protected $db;
-
-	/** @var IUserManager */
-	protected $userManager;
-
-	/** @var INotificationManager */
-	protected $notificationManager;
-
-	/** @var FilesystemHelper */
-	protected $ocFilesystem;
-
-	/** @var LogWrapper */
-	protected $ocLog;
-
-	/** @var Image */
-	protected $image;
-
-	/** @param \OCP\IAvatarManager */
-	protected $avatarManager;
-
-	/**
-	 * @var CappedMemoryCache $usersByDN
-	 */
-	protected $usersByDN;
-	/**
-	 * @var CappedMemoryCache $usersByUid
-	 */
-	protected $usersByUid;
-	/** @var IManager */
-	private $shareManager;
+	protected ?Access $access = null;
+	protected IConfig $ocConfig;
+	protected IDBConnection $db;
+	protected IUserManager $userManager;
+	protected INotificationManager $notificationManager;
+	protected FilesystemHelper $ocFilesystem;
+	protected LoggerInterface $logger;
+	protected Image $image;
+	protected IAvatarManager $avatarManager;
+	/** @var CappedMemoryCache<User> $usersByDN */
+	protected CappedMemoryCache $usersByDN;
+	/** @var CappedMemoryCache<User> $usersByUid */
+	protected CappedMemoryCache $usersByUid;
+	private IManager $shareManager;
 
 	public function __construct(
 		IConfig $ocConfig,
 		FilesystemHelper $ocFilesystem,
-		LogWrapper $ocLog,
+		LoggerInterface $logger,
 		IAvatarManager $avatarManager,
 		Image $image,
 		IUserManager $userManager,
@@ -97,7 +75,7 @@ class Manager {
 	) {
 		$this->ocConfig = $ocConfig;
 		$this->ocFilesystem = $ocFilesystem;
-		$this->ocLog = $ocLog;
+		$this->logger = $logger;
 		$this->avatarManager = $avatarManager;
 		$this->image = $image;
 		$this->userManager = $userManager;
@@ -126,7 +104,7 @@ class Manager {
 	private function createAndCache($dn, $uid) {
 		$this->checkAccess();
 		$user = new User($uid, $dn, $this->access, $this->ocConfig,
-			$this->ocFilesystem, clone $this->image, $this->ocLog,
+			$this->ocFilesystem, clone $this->image, $this->logger,
 			$this->avatarManager, $this->userManager,
 			$this->notificationManager);
 		$this->usersByDN[$dn] = $user;
@@ -175,10 +153,19 @@ class Manager {
 			$this->access->getConnection()->ldapUserDisplayName,
 			$this->access->getConnection()->ldapUserDisplayName2,
 			$this->access->getConnection()->ldapExtStorageHomeAttribute,
+			$this->access->getConnection()->ldapAttributePhone,
+			$this->access->getConnection()->ldapAttributeWebsite,
+			$this->access->getConnection()->ldapAttributeAddress,
+			$this->access->getConnection()->ldapAttributeTwitter,
+			$this->access->getConnection()->ldapAttributeFediverse,
+			$this->access->getConnection()->ldapAttributeOrganisation,
+			$this->access->getConnection()->ldapAttributeRole,
+			$this->access->getConnection()->ldapAttributeHeadline,
+			$this->access->getConnection()->ldapAttributeBiography,
 		];
 
-		$homeRule = $this->access->getConnection()->homeFolderNamingRule;
-		if (strpos($homeRule, 'attr:') === 0) {
+		$homeRule = (string)$this->access->getConnection()->homeFolderNamingRule;
+		if (str_starts_with($homeRule, 'attr:')) {
 			$attributes[] = substr($homeRule, strlen('attr:'));
 		}
 
@@ -232,7 +219,7 @@ class Manager {
 	}
 
 	/**
-	 * @brief returns a User object by it's Nextcloud username
+	 * @brief returns a User object by its Nextcloud username
 	 * @param string $id the DN or username of the user
 	 * @return \OCA\User_LDAP\User\User|\OCA\User_LDAP\User\OfflineUser|null
 	 */
@@ -249,7 +236,7 @@ class Manager {
 	}
 
 	/**
-	 * @brief returns a User object by it's DN or Nextcloud username
+	 * @brief returns a User object by its DN or Nextcloud username
 	 * @param string $id the DN or username of the user
 	 * @return \OCA\User_LDAP\User\User|\OCA\User_LDAP\User\OfflineUser|null
 	 * @throws \Exception when connection could not be established

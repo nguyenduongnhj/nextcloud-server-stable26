@@ -63,19 +63,19 @@ class SupportedDatabase {
 			case MySQL57Platform::class: # extends MySQLPlatform
 			case MariaDb1027Platform::class: # extends MySQLPlatform
 			case MySQLPlatform::class:
-				$result = $this->connection->prepare('SHOW VARIABLES LIKE "version";');
+				$result = $this->connection->prepare("SHOW VARIABLES LIKE 'version';");
 				$result->execute();
 				$row = $result->fetch();
 				$version = strtolower($row['Value']);
 
 				if (strpos($version, 'mariadb') !== false) {
 					if (version_compare($version, '10.2', '<')) {
-						$this->description = $this->l10n->t('MariaDB version "%s" is used. Nextcloud 21 will no longer support this version and requires MariaDB 10.2 or higher.', $row['Value']);
+						$this->description = $this->l10n->t('MariaDB version "%s" is used. Nextcloud 21 and higher do not support this version and require MariaDB 10.2 or higher.', $row['Value']);
 						return;
 					}
 				} else {
 					if (version_compare($version, '8', '<')) {
-						$this->description = $this->l10n->t('MySQL version "%s" is used. Nextcloud 21 will no longer support this version and requires MySQL 8.0 or MariaDB 10.2 or higher.', $row['Value']);
+						$this->description = $this->l10n->t('MySQL version "%s" is used. Nextcloud 21 and higher do not support this version and require MySQL 8.0 or MariaDB 10.2 or higher.', $row['Value']);
 						return;
 					}
 				}
@@ -88,7 +88,7 @@ class SupportedDatabase {
 				$result->execute();
 				$row = $result->fetch();
 				if (version_compare($row['server_version'], '9.6', '<')) {
-					$this->description = $this->l10n->t('PostgreSQL version "%s" is used. Nextcloud 21 will no longer support this version and requires PostgreSQL 9.6 or higher.', $row['server_version']);
+					$this->description = $this->l10n->t('PostgreSQL version "%s" is used. Nextcloud 21 and higher do not support this version and require PostgreSQL 9.6 or higher.', $row['server_version']);
 					return;
 				}
 				break;

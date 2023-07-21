@@ -3028,7 +3028,7 @@
 				)
 				.done(function() {
 					// TODO: error handling / conflicts
-					options = _.extend({scrollTo: true}, options || {});
+					options = _.extend({scrollTo: true}, options || {});
 					self.addAndFetchFileInfo(targetPath, '', options).then(function(status, data) {
 						deferred.resolve(status, data);
 					}, function() {

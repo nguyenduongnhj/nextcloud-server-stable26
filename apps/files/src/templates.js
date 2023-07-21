@@ -4,7 +4,7 @@
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  * @author Julius Härtl <jus@bitgrid.net>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -25,11 +25,11 @@ import { getLoggerBuilder } from '@nextcloud/logger'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
-import { getCurrentDirectory } from './utils/davUtils'
+import { getCurrentDirectory } from './utils/davUtils.js'
 import axios from '@nextcloud/axios'
 import Vue from 'vue'
 
-import TemplatePickerView from './views/TemplatePicker'
+import TemplatePickerView from './views/TemplatePicker.vue'
 import { showError } from '@nextcloud/dialogs'
 
 // Set up logger
@@ -80,6 +80,7 @@ window.addEventListener('DOMContentLoaded', function() {
 					templateName: t('files', 'Templates'),
 					iconClass: 'icon-template-add',
 					fileType: 'file',
+					actionLabel: t('files', 'Create new templates folder'),
 					actionHandler(name) {
 						initTemplatesFolder(name)
 						menu.removeMenuEntry('template-init')
@@ -109,6 +110,7 @@ templates.forEach((provider, index) => {
 				templateName: provider.label + provider.extension,
 				iconClass: provider.iconClass || 'icon-file',
 				fileType: 'file',
+				actionLabel: provider.actionLabel,
 				actionHandler(name) {
 					TemplatePicker.open(name, provider)
 				},
@@ -127,7 +129,7 @@ const initTemplatesFolder = async function(name) {
 	const templatePath = (getCurrentDirectory() + `/${name}`).replace('//', '/')
 	try {
 		logger.debug('Initializing the templates directory', { templatePath })
-		const response = await axios.post(generateOcsUrl('apps/files/api/v1/templates', 2) + 'path', {
+		const response = await axios.post(generateOcsUrl('apps/files/api/v1/templates/path'), {
 			templatePath,
 			copySystemTemplates: true,
 		})

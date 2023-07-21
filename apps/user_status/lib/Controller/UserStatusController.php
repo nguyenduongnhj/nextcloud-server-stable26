@@ -99,6 +99,8 @@ class UserStatusController extends OCSController {
 	public function setStatus(string $statusType): DataResponse {
 		try {
 			$status = $this->service->setStatus($this->userId, $statusType, null, true);
+
+			$this->service->removeBackupUserStatus($this->userId);
 			return new DataResponse($this->formatStatus($status));
 		} catch (InvalidStatusTypeException $ex) {
 			$this->logger->debug('New user-status for "' . $this->userId . '" was rejected due to an invalid status type "' . $statusType . '"');
@@ -118,6 +120,7 @@ class UserStatusController extends OCSController {
 										 ?int $clearAt): DataResponse {
 		try {
 			$status = $this->service->setPredefinedMessage($this->userId, $messageId, $clearAt);
+			$this->service->removeBackupUserStatus($this->userId);
 			return new DataResponse($this->formatStatus($status));
 		} catch (InvalidClearAtException $ex) {
 			$this->logger->debug('New user-status for "' . $this->userId . '" was rejected due to an invalid clearAt value "' . $clearAt . '"');
@@ -132,7 +135,7 @@ class UserStatusController extends OCSController {
 	 * @NoAdminRequired
 	 *
 	 * @param string|null $statusIcon
-	 * @param string $message
+	 * @param string|null $message
 	 * @param int|null $clearAt
 	 * @return DataResponse
 	 * @throws OCSBadRequestException
@@ -141,12 +144,13 @@ class UserStatusController extends OCSController {
 									 ?string $message,
 									 ?int $clearAt): DataResponse {
 		try {
-			if ($message !== null && $message !== '') {
+			if (($message !== null && $message !== '') || ($clearAt !== null && $clearAt !== 0)) {
 				$status = $this->service->setCustomMessage($this->userId, $statusIcon, $message, $clearAt);
 			} else {
 				$this->service->clearMessage($this->userId);
 				$status = $this->service->findByUserId($this->userId);
 			}
+			$this->service->removeBackupUserStatus($this->userId);
 			return new DataResponse($this->formatStatus($status));
 		} catch (InvalidClearAtException $ex) {
 			$this->logger->debug('New user-status for "' . $this->userId . '" was rejected due to an invalid clearAt value "' . $clearAt . '"');
@@ -165,8 +169,8 @@ class UserStatusController extends OCSController {
 	 *
 	 * @return DataResponse
 	 */
-	public function clearStatus(): DataResponse {
-		$this->service->clearStatus($this->userId);
+	public function clearMessage(): DataResponse {
+		$this->service->clearMessage($this->userId);
 		return new DataResponse([]);
 	}
 
@@ -175,8 +179,11 @@ class UserStatusController extends OCSController {
 	 *
 	 * @return DataResponse
 	 */
-	public function clearMessage(): DataResponse {
-		$this->service->clearMessage($this->userId);
+	public function revertStatus(string $messageId): DataResponse {
+		$backupStatus = $this->service->revertUserStatus($this->userId, $messageId, true);
+		if ($backupStatus) {
+			return new DataResponse($this->formatStatus($backupStatus));
+		}
 		return new DataResponse([]);
 	}
 

@@ -36,8 +36,11 @@
 namespace OCA\Files\Controller;
 
 use OCA\Files\Activity\Helper;
+use OCA\Files\AppInfo\Application;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Files\Event\LoadSidebar;
+use OCA\Files\Service\UserConfig;
+use OCA\Files\Service\ViewConfig;
 use OCA\Viewer\Event\LoadViewer;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Controller;
@@ -46,6 +49,7 @@ use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
+use OCP\Collaboration\Resources\LoadAdditionalScriptsEvent as ResourcesLoadAdditionalScriptsEvent;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -64,32 +68,19 @@ use OCP\Share\IManager;
  * @package OCA\Files\Controller
  */
 class ViewController extends Controller {
-	/** @var string */
-	protected $appName;
-	/** @var IRequest */
-	protected $request;
-	/** @var IURLGenerator */
-	protected $urlGenerator;
-	/** @var IL10N */
-	protected $l10n;
-	/** @var IConfig */
-	protected $config;
-	/** @var IEventDispatcher */
-	protected $eventDispatcher;
-	/** @var IUserSession */
-	protected $userSession;
-	/** @var IAppManager */
-	protected $appManager;
-	/** @var IRootFolder */
-	protected $rootFolder;
-	/** @var Helper */
-	protected $activityHelper;
-	/** @var IInitialState */
-	private $initialState;
-	/** @var ITemplateManager */
-	private $templateManager;
-	/** @var IManager */
-	private $shareManager;
+	private IURLGenerator $urlGenerator;
+	private IL10N $l10n;
+	private IConfig $config;
+	private IEventDispatcher $eventDispatcher;
+	private IUserSession $userSession;
+	private IAppManager $appManager;
+	private IRootFolder $rootFolder;
+	private Helper $activityHelper;
+	private IInitialState $initialState;
+	private ITemplateManager $templateManager;
+	private IManager $shareManager;
+	private UserConfig $userConfig;
+	private ViewConfig $viewConfig;
 
 	public function __construct(string $appName,
 		IRequest $request,
@@ -103,11 +94,11 @@ class ViewController extends Controller {
 		Helper $activityHelper,
 		IInitialState $initialState,
 		ITemplateManager $templateManager,
-		IManager $shareManager
+		IManager $shareManager,
+		UserConfig $userConfig,
+		ViewConfig $viewConfig
 	) {
 		parent::__construct($appName, $request);
-		$this->appName = $appName;
-		$this->request = $request;
 		$this->urlGenerator = $urlGenerator;
 		$this->l10n = $l10n;
 		$this->config = $config;
@@ -119,6 +110,8 @@ class ViewController extends Controller {
 		$this->initialState = $initialState;
 		$this->templateManager = $templateManager;
 		$this->shareManager = $shareManager;
+		$this->userConfig = $userConfig;
+		$this->viewConfig = $viewConfig;
 	}
 
 	/**
@@ -147,11 +140,10 @@ class ViewController extends Controller {
 	 * @return array
 	 * @throws \OCP\Files\NotFoundException
 	 */
-	protected function getStorageInfo() {
-		\OC_Util::setupFS();
-		$dirInfo = \OC\Files\Filesystem::getFileInfo('/', false);
+	protected function getStorageInfo(string $dir = '/') {
+		$rootInfo = \OC\Files\Filesystem::getFileInfo('/', false);
 
-		return \OC_Helper::getStorageInfo('/', $dirInfo);
+		return \OC_Helper::getStorageInfo($dir, $rootInfo ?: null);
 	}
 
 	/**
@@ -162,10 +154,10 @@ class ViewController extends Controller {
 	 * @return TemplateResponse|RedirectResponse
 	 * @throws NotFoundException
 	 */
-	public function showFile(string $fileid = null): Response {
+	public function showFile(string $fileid = null, int $openfile = 1): Response {
 		// This is the entry point from the `/f/{fileid}` URL which is hardcoded in the server.
 		try {
-			return $this->redirectToFile($fileid, true);
+			return $this->redirectToFile($fileid, $openfile !== 0);
 		} catch (NotFoundException $e) {
 			return new RedirectResponse($this->urlGenerator->linkToRoute('files.view.index', ['fileNotFound' => true]));
 		}
@@ -174,6 +166,7 @@ class ViewController extends Controller {
 	/**
 	 * @NoCSRFRequired
 	 * @NoAdminRequired
+	 * @UseSession
 	 *
 	 * @param string $dir
 	 * @param string $view
@@ -184,7 +177,8 @@ class ViewController extends Controller {
 	 * @throws NotFoundException
 	 */
 	public function index($dir = '', $view = '', $fileid = null, $fileNotFound = false, $openfile = null) {
-		if ($fileid !== null) {
+
+		if ($fileid !== null && $dir === '') {
 			try {
 				return $this->redirectToFile($fileid);
 			} catch (NotFoundException $e) {
@@ -196,18 +190,14 @@ class ViewController extends Controller {
 
 		// Load the files we need
 		\OCP\Util::addStyle('files', 'merged');
-		\OCP\Util::addScript('files', 'merged-index');
-		\OCP\Util::addScript('files', 'dist/templates');
+		\OCP\Util::addScript('files', 'merged-index', 'files');
+		\OCP\Util::addScript('files', 'main');
 
-		// mostly for the home storage's free space
-		// FIXME: Make non static
-		$storageInfo = $this->getStorageInfo();
-
-		$user = $this->userSession->getUser()->getUID();
+		$userId = $this->userSession->getUser()->getUID();
 
 		// Get all the user favorites to create a submenu
 		try {
-			$favElements = $this->activityHelper->getFavoriteFilePaths($this->userSession->getUser()->getUID());
+			$favElements = $this->activityHelper->getFavoriteFilePaths($userId);
 		} catch (\RuntimeException $e) {
 			$favElements['folders'] = [];
 		}
@@ -220,20 +210,17 @@ class ViewController extends Controller {
 		$favoritesSublistArray = [];
 
 		$navBarPositionPosition = 6;
-		$currentCount = 0;
 		foreach ($favElements['folders'] as $favElement) {
-			$link = $this->urlGenerator->linkToRoute('files.view.index', ['dir' => $favElement, 'view' => 'files']);
-			$sortingValue = ++$currentCount;
 			$element = [
 				'id' => str_replace('/', '-', $favElement),
-				'view' => 'files',
-				'href' => $link,
 				'dir' => $favElement,
 				'order' => $navBarPositionPosition,
-				'folderPosition' => $sortingValue,
 				'name' => basename($favElement),
-				'icon' => 'files',
-				'quickaccesselement' => 'true'
+				'icon' => 'folder',
+				'params' => [
+					'view' => 'files',
+					'dir' => $favElement,
+				],
 			];
 
 			array_push($favoritesSublistArray, $element);
@@ -246,28 +233,30 @@ class ViewController extends Controller {
 		$navItems['favorites']['sublist'] = $favoritesSublistArray;
 		$navItems['favorites']['classes'] = $collapseClasses;
 
-		// parse every menu and add the expandedState user value
+		// parse every menu and add the expanded user value
 		foreach ($navItems as $key => $item) {
-			if (isset($item['expandedState'])) {
-				$navItems[$key]['defaultExpandedState'] = $this->config->getUserValue($this->userSession->getUser()->getUID(), 'files', $item['expandedState'], '0') === '1';
-			}
+			$navItems[$key]['expanded'] = $this->config->getUserValue($userId, 'files', 'show_' . $item['id'], '0') === '1';
 		}
 
 		$nav->assign('navigationItems', $navItems);
 
-		$nav->assign('usage', \OC_Helper::humanFileSize($storageInfo['used']));
-		if ($storageInfo['quota'] === \OCP\Files\FileInfo::SPACE_UNLIMITED) {
-			$totalSpace = $this->l10n->t('Unlimited');
-		} else {
-			$totalSpace = \OC_Helper::humanFileSize($storageInfo['total']);
-		}
-		$nav->assign('total_space', $totalSpace);
-		$nav->assign('quota', $storageInfo['quota']);
-		$nav->assign('usage_relative', $storageInfo['relative']);
-
-		$nav->assign('webdav_url', \OCP\Util::linkToRemote('dav/files/' . $user));
-
 		$contentItems = [];
+
+		try {
+			// If view is files, we use the directory, otherwise we use the root storage
+			$storageInfo =  $this->getStorageInfo(($view === 'files' && $dir) ? $dir : '/');
+		} catch(\Exception $e) {
+			$storageInfo = $this->getStorageInfo();
+		}
+
+		$this->initialState->provideInitialState('storageStats', $storageInfo);
+		$this->initialState->provideInitialState('navigation', $navItems);
+		$this->initialState->provideInitialState('config', $this->userConfig->getConfigs());
+		$this->initialState->provideInitialState('viewConfigs', $this->viewConfig->getConfigs());
+
+		// File sorting user config
+		$filesSortingConfig = json_decode($this->config->getUserValue($userId, 'files', 'files_sorting_configs', '{}'), true);
+		$this->initialState->provideInitialState('filesSortingConfig', $filesSortingConfig);
 
 		// render the container content for every navigation item
 		foreach ($navItems as $item) {
@@ -294,6 +283,7 @@ class ViewController extends Controller {
 			];
 		}
 
+		$this->eventDispatcher->dispatchTyped(new ResourcesLoadAdditionalScriptsEvent());
 		$event = new LoadAdditionalScriptsEvent();
 		$this->eventDispatcher->dispatchTyped($event);
 		$this->eventDispatcher->dispatchTyped(new LoadSidebar());
@@ -301,6 +291,7 @@ class ViewController extends Controller {
 		if (class_exists(LoadViewer::class)) {
 			$this->eventDispatcher->dispatchTyped(new LoadViewer());
 		}
+
 		$this->initialState->provideInitialState('templates_path', $this->templateManager->hasTemplateDirectory() ? $this->templateManager->getTemplatePath() : false);
 		$this->initialState->provideInitialState('templates', $this->templateManager->listCreators());
 
@@ -310,13 +301,12 @@ class ViewController extends Controller {
 		$params['ownerDisplayName'] = $storageInfo['ownerDisplayName'] ?? '';
 		$params['isPublic'] = false;
 		$params['allowShareWithLink'] = $this->shareManager->shareApiAllowLinks() ? 'yes' : 'no';
-		$params['defaultFileSorting'] = $this->config->getUserValue($user, 'files', 'file_sorting', 'name');
-		$params['defaultFileSortingDirection'] = $this->config->getUserValue($user, 'files', 'file_sorting_direction', 'asc');
-		$params['showgridview'] = $this->config->getUserValue($user, 'files', 'show_grid', false);
-		$params['isIE'] = \OC_Util::isIe();
-		$showHidden = (bool) $this->config->getUserValue($this->userSession->getUser()->getUID(), 'files', 'show_hidden', false);
+		$params['defaultFileSorting'] = $filesSortingConfig['files']['mode'] ?? 'basename';
+		$params['defaultFileSortingDirection'] = $filesSortingConfig['files']['direction'] ?? 'asc';
+		$params['showgridview'] = $this->config->getUserValue($userId, 'files', 'show_grid', false);
+		$showHidden = (bool) $this->config->getUserValue($userId, 'files', 'show_hidden', false);
 		$params['showHiddenFiles'] = $showHidden ? 1 : 0;
-		$cropImagePreviews = (bool) $this->config->getUserValue($this->userSession->getUser()->getUID(), 'files', 'crop_image_previews', true);
+		$cropImagePreviews = (bool) $this->config->getUserValue($userId, 'files', 'crop_image_previews', true);
 		$params['cropImagePreviews'] = $cropImagePreviews ? 1 : 0;
 		$params['fileNotFound'] = $fileNotFound ? 1 : 0;
 		$params['appNavigation'] = $nav;
@@ -324,7 +314,7 @@ class ViewController extends Controller {
 		$params['hiddenFields'] = $event->getHiddenFields();
 
 		$response = new TemplateResponse(
-			$this->appName,
+			Application::APP_ID,
 			'index',
 			$params
 		);

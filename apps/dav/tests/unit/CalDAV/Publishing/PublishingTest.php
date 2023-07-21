@@ -36,7 +36,7 @@ use Sabre\HTTP\Request;
 use Sabre\HTTP\Response;
 use Test\TestCase;
 
-class PluginTest extends TestCase {
+class PublishingTest extends TestCase {
 
 	/** @var PublishPlugin */
 	private $plugin;
@@ -77,7 +77,7 @@ class PluginTest extends TestCase {
 		$this->plugin->initialize($this->server);
 	}
 
-	public function testPublishing() {
+	public function testPublishing(): void {
 		$this->book->expects($this->once())->method('setPublishStatus')->with(true);
 
 		// setup request
@@ -88,7 +88,7 @@ class PluginTest extends TestCase {
 		$this->plugin->httpPost($request, $response);
 	}
 
-	public function testUnPublishing() {
+	public function testUnPublishing(): void {
 		$this->book->expects($this->once())->method('setPublishStatus')->with(false);
 
 		// setup request

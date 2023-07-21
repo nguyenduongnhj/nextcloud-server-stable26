@@ -6,7 +6,7 @@
  * @author John Molakvoæ <skjnldsv@protonmail.com>
  * @author Julius Härtl <jus@bitgrid.net>
  *
- * @license GNU AGPL version 3 or any later version
+ * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -28,19 +28,17 @@ import 'url-search-params-polyfill'
 
 import { generateOcsUrl } from '@nextcloud/router'
 import axios from '@nextcloud/axios'
-import Share from '../models/Share'
+import Share from '../models/Share.js'
+import { emit } from '@nextcloud/event-bus'
 
-const shareUrl = generateOcsUrl('apps/files_sharing/api/v1', 2) + 'shares'
-const headers = {
-	'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-}
+const shareUrl = generateOcsUrl('apps/files_sharing/api/v1/shares')
 
 export default {
 	methods: {
 		/**
 		 * Create a new share
 		 *
-		 * @param {Object} data destructuring object
+		 * @param {object} data destructuring object
 		 * @param {string} data.path  path to the file/folder which should be shared
 		 * @param {number} data.shareType  0 = user; 1 = group; 3 = public link; 6 = federated cloud share
 		 * @param {string} data.shareWith  user/group id with which the file should be shared (optional for shareType > 1)
@@ -50,16 +48,19 @@ export default {
 		 * @param {boolean} [data.sendPasswordByTalk=false] send the password via a talk conversation
 		 * @param {string} [data.expireDate=''] expire the shareautomatically after
 		 * @param {string} [data.label=''] custom label
-		 * @returns {Share} the new share
+		 * @param {string} [data.attributes=null] Share attributes encoded as json
+		 * @return {Share} the new share
 		 * @throws {Error}
 		 */
-		async createShare({ path, permissions, shareType, shareWith, publicUpload, password, sendPasswordByTalk, expireDate, label }) {
+		async createShare({ path, permissions, shareType, shareWith, publicUpload, password, sendPasswordByTalk, expireDate, label, attributes }) {
 			try {
-				const request = await axios.post(shareUrl, { path, permissions, shareType, shareWith, publicUpload, password, sendPasswordByTalk, expireDate, label })
+				const request = await axios.post(shareUrl, { path, permissions, shareType, shareWith, publicUpload, password, sendPasswordByTalk, expireDate, label, attributes })
 				if (!request?.data?.ocs) {
 					throw request
 				}
-				return new Share(request.data.ocs.data)
+				const share = new Share(request.data.ocs.data)
+				emit('files_sharing:share:created', { share })
+				return share
 			} catch (error) {
 				console.error('Error while creating share', error)
 				const errorMessage = error?.response?.data?.ocs?.meta?.message
@@ -83,6 +84,7 @@ export default {
 				if (!request?.data?.ocs) {
 					throw request
 				}
+				emit('files_sharing:share:deleted', { id })
 				return true
 			} catch (error) {
 				console.error('Error while deleting share', error)
@@ -99,15 +101,17 @@ export default {
 		 * Update a share
 		 *
 		 * @param {number} id share id
-		 * @param {Object} properties key-value object of the properties to update
+		 * @param {object} properties key-value object of the properties to update
 		 */
 		async updateShare(id, properties) {
 			try {
-				const request = await axios.put(shareUrl + `/${id}`, properties, headers)
+				const request = await axios.put(shareUrl + `/${id}`, properties)
+				emit('files_sharing:share:updated', { id })
 				if (!request?.data?.ocs) {
 					throw request
+				} else {
+					return request.data.ocs.data
 				}
-				return true
 			} catch (error) {
 				console.error('Error while updating share', error)
 				if (error.response.status !== 400) {

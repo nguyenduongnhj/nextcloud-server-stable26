@@ -25,14 +25,15 @@ declare(strict_types=1);
  */
 namespace OCA\SystemTags\AppInfo;
 
+use OCA\SystemTags\Search\TagSearchProvider;
 use OCA\SystemTags\Activity\Listener;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\SystemTag\ManagerEvent;
 use OCP\SystemTag\MapperEvent;
-use Symfony\Component\EventDispatcher\EventDispatcher;
 
 class Application extends App implements IBootstrap {
 	public const APP_ID = 'systemtags';
@@ -42,18 +43,18 @@ class Application extends App implements IBootstrap {
 	}
 
 	public function register(IRegistrationContext $context): void {
+		$context->registerSearchProvider(TagSearchProvider::class);
 	}
 
 	public function boot(IBootContext $context): void {
-		$context->injectFn(function (EventDispatcher $dispatcher) use ($context) {
+		$context->injectFn(function (IEventDispatcher $dispatcher) use ($context) {
 			/*
 			 * @todo move the OCP events and then move the registration to `register`
 			 */
 			$dispatcher->addListener(
 				'OCA\Files::loadAdditionalScripts',
 				function () {
-					// FIXME: no public API for these ?
-					\OCP\Util::addScript('dist/systemtags');
+					\OCP\Util::addScript('core', 'systemtags');
 					\OCP\Util::addScript(self::APP_ID, 'systemtags');
 				}
 			);

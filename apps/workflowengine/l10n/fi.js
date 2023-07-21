@@ -28,6 +28,10 @@ OC.L10N.register(
     "%s renamed %s" : "%s nimesi uudelleen %s",
     "%s copied %s" : "%s kopioi %s",
     "Operation #%s does not exist" : "Toimenpidettä #%s ei ole olemassa",
+    "Entity %s does not exist" : "Entiteettiä %s ei ole olemassa",
+    "Entity %s is invalid" : "Entiteetti %s on virheellinen",
+    "No events are chosen." : "Tapahtumia ei ole valittu.",
+    "Entity %s has no event %s" : "Entiteetillä %s ei ole tapahtumaa %s",
     "Operation %s does not exist" : "Toimenpidettä %s ei ole olemassa",
     "Operation %s is invalid" : "Toimenpide %s on virheellinen",
     "Check %s does not exist" : "Tarkistusta %s ei ole olemassa",
@@ -42,12 +46,7 @@ OC.L10N.register(
     "Office documents" : "Toimisto-ohjelmistojen asiakirjat",
     "PDF documents" : "PDF-asiakirjat",
     "Custom mimetype" : "Mukautettu MIME-tyyppi",
-    "No results" : "Ei tuloksia",
-    "%s (invisible)" : "%s (näkymätön)",
-    "%s (restricted)" : "%s (rajoitettu)",
-    "Predefined URLs" : "Ennalta määritellyt URL-osoitteet",
     "Files WebDAV" : "Tiedostot WebDAV",
-    "Others" : "Muut",
     "Android client" : "Android-sovellus",
     "iOS client" : "iOS-sovellus",
     "Desktop client" : "Työpöytäsovellus",
@@ -87,6 +86,7 @@ OC.L10N.register(
     "User group membership" : "Käyttäjäryhmäjäsenyys",
     "is member of" : "on jäsen",
     "is not member of" : "ei ole jäsen",
-    "Browse the app store" : "Selaa sovelluskauppaa"
+    "Predefined URLs" : "Ennalta määritellyt URL-osoitteet",
+    "Others" : "Muut"
 },
 "nplurals=2; plural=(n != 1);");

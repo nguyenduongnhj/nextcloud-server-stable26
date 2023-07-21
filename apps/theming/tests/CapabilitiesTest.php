@@ -29,6 +29,7 @@
 namespace OCA\Theming\Tests;
 
 use OCA\Theming\Capabilities;
+use OCA\Theming\ImageManager;
 use OCA\Theming\ThemingDefaults;
 use OCA\Theming\Util;
 use OCP\App\IAppManager;
@@ -76,8 +77,8 @@ class CapabilitiesTest extends TestCase {
 				'slogan' => 'slogan',
 				'color' => '#FFFFFF',
 				'color-text' => '#000000',
-				'color-element' => '#aaaaaa',
-				'color-element-bright' => '#aaaaaa',
+				'color-element' => '#b3b3b3',
+				'color-element-bright' => '#b3b3b3',
 				'color-element-dark' => '#FFFFFF',
 				'logo' => 'http://absolute/logo',
 				'background' => 'http://absolute/background',
@@ -108,9 +109,9 @@ class CapabilitiesTest extends TestCase {
 				'slogan' => 'slogan3',
 				'color' => '#000000',
 				'color-text' => '#ffffff',
-				'color-element' => '#000000',
-				'color-element-bright' => '#000000',
-				'color-element-dark' => '#555555',
+				'color-element' => '#4d4d4d',
+				'color-element-bright' => '#4d4d4d',
+				'color-element-dark' => '#4d4d4d',
 				'logo' => 'http://localhost/logo5',
 				'background' => '#000000',
 				'background-plain' => true,
@@ -124,9 +125,9 @@ class CapabilitiesTest extends TestCase {
 				'slogan' => 'slogan3',
 				'color' => '#000000',
 				'color-text' => '#ffffff',
-				'color-element' => '#000000',
-				'color-element-bright' => '#000000',
-				'color-element-dark' => '#555555',
+				'color-element' => '#4d4d4d',
+				'color-element-bright' => '#4d4d4d',
+				'color-element-dark' => '#4d4d4d',
 				'logo' => 'http://localhost/logo5',
 				'background' => '#000000',
 				'background-plain' => true,
@@ -173,11 +174,11 @@ class CapabilitiesTest extends TestCase {
 			->method('getTextColorPrimary')
 			->willReturn($textColor);
 
-		$util = new Util($this->config, $this->createMock(IAppManager::class), $this->createMock(IAppData::class));
+		$util = new Util($this->config, $this->createMock(IAppManager::class), $this->createMock(IAppData::class), $this->createMock(ImageManager::class));
 		$this->util->expects($this->exactly(3))
 			->method('elementColor')
 			->with($color)
-			->willReturnCallback(static function (string $color, bool $brightBackground = true) use ($util) {
+			->willReturnCallback(static function (string $color, ?bool $brightBackground = null) use ($util) {
 				return $util->elementColor($color, $brightBackground);
 			});
 

@@ -1,7 +1,7 @@
 import Vue from 'vue'
 import { loadState } from '@nextcloud/initial-state'
 import { translate } from '@nextcloud/l10n'
-import CalDavSettings from './views/CalDavSettings'
+import CalDavSettings from './views/CalDavSettings.vue'
 
 Vue.prototype.$t = translate
 
@@ -16,6 +16,10 @@ const CalDavSettingsView = new View({
 				'generateBirthdayCalendar'
 			),
 			sendEventReminders: loadState('dav', 'sendEventReminders'),
+			sendEventRemindersToSharedUsers: loadState(
+				'dav',
+				'sendEventRemindersToSharedUsers'
+			),
 			sendEventRemindersPush: loadState('dav', 'sendEventRemindersPush'),
 		}
 	},
